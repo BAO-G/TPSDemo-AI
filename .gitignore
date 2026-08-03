@@ -39,7 +39,8 @@
 .vsconfig
 
 # 开发过程中的验证截图，无需上传
-/[Aa]ssets/Screenshots/
+/[Aa]ssets/Screenshots
+/[Aa]ssets/Screenshots.meta
 
 # Gradle cache directory
 .gradle/
@@ -108,3 +109,4 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+Assets/Screenshots.meta
