@@ -2,61 +2,79 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 玩家血量管理：扣血/回血，通过事件通知其他系统
+/// 玩家血量管理：扣血/回血/医疗包，通过事件通知其他系统
+/// 阶段2新增：医疗包计数、消耗式治疗
 /// </summary>
 public class PlayerHealth : MonoBehaviour
 {
     [Header("血量参数")]
     public float maxHealth = 100f;
 
-    // 事件：受伤(伤害值)、死亡、血量变化(当前/最大)
+    [Header("医疗参数")]
+    public int initialMedkits = 3;                   // 初始医疗包数量
+    public float healAmount = 30f;                   // 每次治疗恢复血量
+    public int maxMedkits = 5;                       // 医疗包携带上限
+
+    // 事件：受伤(伤害值)、死亡、血量变化(当前/最大)、医疗包数量变化
     public event Action<float> OnDamaged;
     public event Action OnDeath;
     public event Action<float, float> OnHealthChanged;
+    public event Action<int> OnMedkitChanged;
 
     private float _currentHealth;
+    private int _medkitCount;
 
     private void Start()
     {
         _currentHealth = maxHealth;
+        _medkitCount = initialMedkits;
+        // 立即触发事件，确保 UIManager 能获取初始医疗包数量
+        OnMedkitChanged?.Invoke(_medkitCount);
     }
 
-    /// <summary>扣血，血量归零时触发死亡事件</summary>
     public void TakeDamage(float amount)
     {
-        if (amount <= 0f)
-        {
-            return;
-        }
+        if (amount <= 0f) return;
 
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);
         OnDamaged?.Invoke(amount);
         OnHealthChanged?.Invoke(_currentHealth, maxHealth);
 
         if (_currentHealth <= 0f)
-        {
             OnDeath?.Invoke();
-        }
     }
 
-    /// <summary>回血，不超过上限</summary>
+    /// <summary>尝试使用医疗包治疗，返回是否成功</summary>
+    public bool TryHeal()
+    {
+        if (_medkitCount <= 0) return false;
+        if (_currentHealth >= maxHealth) return false;
+
+        _currentHealth = Mathf.Min(maxHealth, _currentHealth + healAmount);
+        _medkitCount--;
+        OnHealthChanged?.Invoke(_currentHealth, maxHealth);
+        OnMedkitChanged?.Invoke(_medkitCount);
+        return true;
+    }
+
+    /// <summary>直接回血（不受医疗包限制，用于测试或特殊效果）</summary>
     public void Heal(float amount)
     {
-        if (amount <= 0f)
-        {
-            return;
-        }
-
+        if (amount <= 0f) return;
         _currentHealth = Mathf.Min(maxHealth, _currentHealth + amount);
         OnHealthChanged?.Invoke(_currentHealth, maxHealth);
     }
 
-    /// <summary>当前血量</summary>
+    /// <summary>增加医疗包（拾取物调用）</summary>
+    public void AddMedkit(int count)
+    {
+        _medkitCount = Mathf.Min(_medkitCount + count, maxMedkits);
+        OnMedkitChanged?.Invoke(_medkitCount);
+    }
+
     public float CurrentHealth => _currentHealth;
 
-    /// <summary>当前血量百分比 0~1</summary>
-    public float GetHealthPercent()
-    {
-        return _currentHealth / maxHealth;
-    }
+    public int MedkitCount => _medkitCount;
+
+    public float GetHealthPercent() => _currentHealth / maxHealth;
 }

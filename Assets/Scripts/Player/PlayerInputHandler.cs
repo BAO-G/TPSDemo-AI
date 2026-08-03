@@ -13,6 +13,8 @@ public class PlayerInputHandler : MonoBehaviour
     private InputAction _reloadAction;
     private InputAction _jumpAction;
     private InputAction _aimAction;
+    private InputAction _crouchAction;
+    private InputAction _healAction;
 
     private void Awake()
     {
@@ -29,10 +31,12 @@ public class PlayerInputHandler : MonoBehaviour
         _shootAction = _playerInput.actions.FindAction("Shoot");
         _reloadAction = _playerInput.actions.FindAction("Reload");
         _jumpAction = _playerInput.actions.FindAction("Jump");
-        
+        _aimAction = _playerInput.actions.FindAction("Aim");
+        _crouchAction = _playerInput.actions.FindAction("Crouch");
+        _healAction = _playerInput.actions.FindAction("Heal");
+
         // 确保 ActionMap 已启用（修复 PlayerInput 未自动激活的问题）
         _playerInput.actions.FindActionMap("Player")?.Enable();
-_aimAction = _playerInput.actions.FindAction("Aim");
     }
 
     /// <summary>移动方向输入 (WASD/摇杆)</summary>
@@ -69,6 +73,18 @@ _aimAction = _playerInput.actions.FindAction("Aim");
     public bool IsAimHeld()
     {
         return _aimAction != null && _aimAction.IsPressed();
+    }
+
+    /// <summary>蹲伏键是否按住</summary>
+    public bool IsCrouchHeld()
+    {
+        return _crouchAction != null && _crouchAction.IsPressed();
+    }
+
+    /// <summary>治疗键是否本帧按下</summary>
+    public bool IsHealPressed()
+    {
+        return _healAction != null && _healAction.WasPressedThisFrame();
     }
 
     /// <summary>冲刺键是否按住（直接检测键盘，不依赖 InputActionAsset）</summary>

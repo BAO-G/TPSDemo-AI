@@ -14,6 +14,9 @@ public class WeaponData : ScriptableObject
     public float maxRange = 200f;
     public float bulletSpread = 0.02f;   // 散布角度（弧度）
     public float recoilAmount = 1.5f;    // 后坐力幅度
+    public float adsSpreadMultiplier = 0.3f;     // ADS时散布倍率（越小越准）
+    public int reserveAmmoMax = 120;              // 最大备弹量
+    public int ammoPickupAmount = 30;              // 单个弹药包恢复备弹量
     public GameObject weaponPrefab;      // 武器模型预制体引用
     public GameObject muzzleFlashPrefab; // 枪口特效（可选）
 }

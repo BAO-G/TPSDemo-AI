@@ -20,6 +20,10 @@ MonoBehaviour:
   maxRange: 200
   bulletSpread: 0.02
   recoilAmount: 1.5
+  adsSpreadMultiplier: 0.3
+  adsMoveSpeedMultiplier: 0.5
+  reserveAmmoMax: 120
+  ammoPickupAmount: 30
   weaponPrefab: {fileID: 1296539039355890, guid: 74e281f037063594ba9295673e09fecd,
     type: 3}
   muzzleFlashPrefab: {fileID: 157586, guid: 2574ca206a571a342a7fab69fdfb87aa, type: 3}

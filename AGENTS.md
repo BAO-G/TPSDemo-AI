@@ -34,3 +34,13 @@
 - 私有字段 `_驼峰`，公开字段/属性驼峰
 - 中文注释说明关键逻辑，不写废话注释
 - 优先事件/委托解耦，避免直接互相引用
+
+## 角色权限边界（铁律，不可越权）
+
+| 角色 | 职责 | 允许操作 | 禁止操作 |
+|------|------|----------|----------|
+| **architect** (Pro) | 读取现状 → 分析 → 输出方案 | read、grep、glob、explore、unity_reflect | ❌ 创建/修改脚本、场景、预制体、资产 |
+| **coder** (Flash) | 接收方案 → 实现代码 | create_script、apply_text_edits、manage_scene、manage_gameobject | ❌ 自行规划、跳过依赖、修改方案 |
+| **explore** | 审查 → 报告 | read、read_console、grep、unity_reflect | ❌ 修改任何文件 |
+
+> **architect 的任务以"输出方案文档"为终点**，不是以"完成代码"为终点。每次 @architect 时，architect 必须先声明自己的角色边界再开始工作。
