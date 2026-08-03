@@ -36,6 +36,10 @@
 
 # Visual Studio cache directory
 .vs/
+.vsconfig
+
+# 开发过程中的验证截图，无需上传
+/[Aa]ssets/Screenshots/
 
 # Gradle cache directory
 .gradle/
