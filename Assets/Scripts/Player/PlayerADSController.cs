@@ -13,9 +13,9 @@ public class PlayerADSController : MonoBehaviour
     public float adsTransitionSpeed = 10f;
     public float adsMoveSpeedMultiplier = 0.5f;     // ADS时移速倍率
 
-    [Header("武器贴枪偏移")]
-    public Vector3 adsWeaponPosition = new Vector3(0f, -0.15f, 0.3f);
-    public Vector3 adsWeaponRotation = Vector3.zero;
+    [Header("武器贴枪偏移（相对挂点默认位置的偏移量）")]
+    public Vector3 adsPositionOffset = new Vector3(-0.12f, 0.45f, 0.15f); // 抬至眼线并对齐屏幕中线
+    public Vector3 adsRotationOffset = Vector3.zero;
 
     private CinemachineCamera _cinemachineCamera;
     private PlayerInputHandler _inputHandler;
@@ -67,11 +67,13 @@ public class PlayerADSController : MonoBehaviour
             _cinemachineCamera.Lens.FieldOfView = Mathf.Lerp(defaultFOV, adsFOV, _adsProgress);
         }
 
-        // 武器贴枪：ADS 时武器移向屏幕中心
+        // 武器贴枪：ADS 时武器从默认挂点向屏幕中线/眼线偏移
         if (_weaponHolder != null)
         {
-            _weaponHolder.localPosition = Vector3.Lerp(_defaultWeaponPosition, adsWeaponPosition, _adsProgress);
-            _weaponHolder.localRotation = Quaternion.Slerp(_defaultWeaponRotation, Quaternion.Euler(adsWeaponRotation), _adsProgress);
+            Vector3 adsTarget = _defaultWeaponPosition + adsPositionOffset;
+            Quaternion adsRotTarget = _defaultWeaponRotation * Quaternion.Euler(adsRotationOffset);
+            _weaponHolder.localPosition = Vector3.Lerp(_defaultWeaponPosition, adsTarget, _adsProgress);
+            _weaponHolder.localRotation = Quaternion.Slerp(_defaultWeaponRotation, adsRotTarget, _adsProgress);
         }
     }
 }

@@ -29,11 +29,13 @@ public class EnemyBase : MonoBehaviour
     private float _lastAttackTime;
     private bool _isDead;
     private float _lastLogTime; // 状态日志节流计时（每 0.5 秒输出一次）
+    private Animator _animator; // 动画驱动器（可为空，阶段3接入）
 
     private void Start()
     {
         _currentHealth = maxHealth;
         _navAgent = GetComponent<NavMeshAgent>();
+        _animator = GetComponentInChildren<Animator>();
 
         // 初始化为负值，避免首帧攻击要等 1 秒冷却
         _lastAttackTime = -attackCooldown;
@@ -81,6 +83,17 @@ public class EnemyBase : MonoBehaviour
         else
         {
             Patrol();
+        }
+    }
+
+    /// <summary>用实际移动速度驱动动画 Blend Tree（Speed 参数）</summary>
+    private void LateUpdate()
+    {
+        if (_animator != null && _navAgent != null)
+        {
+            _animator.SetFloat("Speed", _isDead ? 0f : _navAgent.velocity.magnitude);
+            // NavMeshAgent 始终贴地，直接置为 true 让 Jump 状态正常退出
+            _animator.SetBool("Grounded", true);
         }
     }
 
@@ -179,6 +192,12 @@ public class EnemyBase : MonoBehaviour
 
         _lastAttackTime = Time.time;
 
+        // 播放射击动画（阶段3接入）
+        if (_animator != null)
+        {
+            _animator.SetTrigger("Fire");
+        }
+
         // 上面已确认 _playerHealth 非空且存活，直接造成伤害
         _playerHealth.TakeDamage(attackDamage);
         Debug.Log($"[{gameObject.name}] 攻击！造成 {attackDamage} 伤害 | 玩家剩余血量={_playerHealth.GetHealthPercent() * 100:F0}%");
@@ -194,6 +213,9 @@ public class EnemyBase : MonoBehaviour
 
         _currentHealth -= amount;
         Debug.Log($"<color=red>💥 {gameObject.name} 受到 {amount} 伤害！剩余血量 {_currentHealth}</color>");
+
+        // 受击时播放 hit reaction 动画（UpperBody 层 HitReaction 状态）
+        _animator?.SetTrigger("Hit");
 
         if (_currentHealth <= 0f)
         {
@@ -211,6 +233,11 @@ public class EnemyBase : MonoBehaviour
 
         _isDead = true;
         Debug.Log("敌人死亡");
+
+        if (_animator != null)
+        {
+            _animator.SetFloat("Speed", 0f);
+        }
 
         if (_navAgent != null)
         {

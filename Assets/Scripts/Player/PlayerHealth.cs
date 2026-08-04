@@ -23,11 +23,13 @@ public class PlayerHealth : MonoBehaviour
 
     private float _currentHealth;
     private int _medkitCount;
+    private Animator _animator; // 受击动画驱动器（从角色模型子物体获取）
 
     private void Start()
     {
         _currentHealth = maxHealth;
         _medkitCount = initialMedkits;
+        _animator = GetComponentInChildren<Animator>();
         // 立即触发事件，确保 UIManager 能获取初始医疗包数量
         OnMedkitChanged?.Invoke(_medkitCount);
     }
@@ -39,6 +41,9 @@ public class PlayerHealth : MonoBehaviour
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);
         OnDamaged?.Invoke(amount);
         OnHealthChanged?.Invoke(_currentHealth, maxHealth);
+
+        // 受击时播放 hit reaction 动画（UpperBody 层 HitReaction 状态）
+        _animator?.SetTrigger("Hit");
 
         if (_currentHealth <= 0f)
             OnDeath?.Invoke();

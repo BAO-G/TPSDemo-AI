@@ -18,11 +18,15 @@ public class FirearmWeapon : MonoBehaviour
     private GameObject _muzzleFlash;
     private PlayerController _playerController;
     private PlayerADSController _adsController;
+    private Animator _playerAnimator; // 玩家角色动画（阶段3接入，驱动射击/换弹动作）
 
     private void Start()
     {
         _playerController = FindAnyObjectByType<PlayerController>();
         _adsController = FindAnyObjectByType<PlayerADSController>();
+
+        // 武器挂在玩家子层级，从根节点向下找角色 Animator
+        _playerAnimator = transform.root.GetComponentInChildren<Animator>();
 
         if (weaponData == null)
         {
@@ -75,6 +79,9 @@ public class FirearmWeapon : MonoBehaviour
         _nextFireTime = Time.time + (60f / weaponData.fireRate);
         PlayMuzzleFlash();
 
+        if (_playerAnimator != null)
+            _playerAnimator.SetTrigger("Fire");
+
         if (_playerController != null)
             _playerController.ApplyRecoil(weaponData.recoilAmount);
     }
@@ -92,6 +99,8 @@ public class FirearmWeapon : MonoBehaviour
     private IEnumerator ReloadRoutine()
     {
         _isReloading = true;
+        if (_playerAnimator != null)
+            _playerAnimator.SetTrigger("Reload");
         yield return new WaitForSeconds(weaponData.reloadTime);
 
         int needed = weaponData.magazineSize - _currentAmmo;

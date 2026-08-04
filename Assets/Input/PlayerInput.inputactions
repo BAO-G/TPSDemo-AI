@@ -76,6 +76,33 @@
                                          "processors":  "",
                                          "interactions":  "",
                                          "initialStateCheck":  false
+                                     },
+                                     {
+                                         "name":  "SwitchWeapon1",
+                                         "type":  "Button",
+                                         "id":  "e5f6a7b8-c9d0-1234-efab-345678901234",
+                                         "expectedControlType":  "Button",
+                                         "processors":  "",
+                                         "interactions":  "",
+                                         "initialStateCheck":  false
+                                     },
+                                     {
+                                         "name":  "SwitchWeapon2",
+                                         "type":  "Button",
+                                         "id":  "f6a7b8c9-d0e1-2345-fabc-456789012345",
+                                         "expectedControlType":  "Button",
+                                         "processors":  "",
+                                         "interactions":  "",
+                                         "initialStateCheck":  false
+                                     },
+                                     {
+                                         "name":  "SwitchWeapon3",
+                                         "type":  "Button",
+                                         "id":  "a7b8c9d0-e1f2-3456-abcd-567890123456",
+                                         "expectedControlType":  "Button",
+                                         "processors":  "",
+                                         "interactions":  "",
+                                         "initialStateCheck":  false
                                      }
                                  ],
                      "bindings":  [
@@ -230,6 +257,39 @@
                                           "processors":  "",
                                           "groups":  "",
                                           "action":  "Heal",
+                                          "isComposite":  false,
+                                          "isPartOfComposite":  false
+                                      },
+                                      {
+                                          "name":  "",
+                                          "id":  "b8c9d0e1-f2a3-4567-bcde-678901234567",
+                                          "path":  "\u003cKeyboard\u003e/1",
+                                          "interactions":  "",
+                                          "processors":  "",
+                                          "groups":  "",
+                                          "action":  "SwitchWeapon1",
+                                          "isComposite":  false,
+                                          "isPartOfComposite":  false
+                                      },
+                                      {
+                                          "name":  "",
+                                          "id":  "c9d0e1f2-a3b4-5678-cdef-789012345678",
+                                          "path":  "\u003cKeyboard\u003e/2",
+                                          "interactions":  "",
+                                          "processors":  "",
+                                          "groups":  "",
+                                          "action":  "SwitchWeapon2",
+                                          "isComposite":  false,
+                                          "isPartOfComposite":  false
+                                      },
+                                      {
+                                          "name":  "",
+                                          "id":  "d0e1f2a3-b4c5-6789-defa-890123456789",
+                                          "path":  "\u003cKeyboard\u003e/3",
+                                          "interactions":  "",
+                                          "processors":  "",
+                                          "groups":  "",
+                                          "action":  "SwitchWeapon3",
                                           "isComposite":  false,
                                           "isPartOfComposite":  false
                                       }

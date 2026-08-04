@@ -7,9 +7,9 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     [Header("移动参数")]
-    public float walkSpeed = 5f;
-    public float sprintSpeed = 8f;
-    public float jumpHeight = 2f;
+    public float walkSpeed = 3f;
+    public float sprintSpeed = 6f;
+    public float jumpHeight = 1.0f;
     public float gravity = -9.81f;
 
     [Header("视角参数")]
@@ -21,10 +21,12 @@ public class PlayerController : MonoBehaviour
     private PlayerInputHandler _inputHandler;
     private Transform _cameraTarget;
     private float _verticalVelocity;
+    private Vector3 _horizontalVelocity; // 本帧水平速度（供动画驱动，也用于合并单次 Move）
     private float _cameraPitch;
     private PlayerHealth _playerHealth;
     private PlayerADSController _adsController;
     private PlayerCoverController _coverController;
+    private Animator _animator; // 角色动画驱动（阶段3接入）
 
     /// <summary>当前血量，供 ADS/Cover 控制器读取</summary>
     public float CurrentHealth => _playerHealth != null ? _playerHealth.CurrentHealth : 100f;
@@ -36,6 +38,9 @@ public class PlayerController : MonoBehaviour
         _playerHealth = GetComponent<PlayerHealth>();
         _adsController = GetComponent<PlayerADSController>();
         _coverController = GetComponent<PlayerCoverController>();
+        _animator = GetComponentInChildren<Animator>();
+        if (_animator != null)
+            _animator.applyRootMotion = false; // 移动由 CharacterController 接管
 
         _cameraTarget = transform.Find("CameraTarget");
 
@@ -47,7 +52,28 @@ public class PlayerController : MonoBehaviour
     {
         HandleMovement();
         HandleGravity();
+        ApplyCombinedMove();
         HandleLook();
+    }
+
+    /// <summary>水平速度+垂直速度合并为单次 Move：多次 Move 会导致 velocity 只计最后一次，动画取不到水平速度</summary>
+    private void ApplyCombinedMove()
+    {
+        if (_characterController == null) return;
+        _characterController.Move((_horizontalVelocity + new Vector3(0f, _verticalVelocity, 0f)) * Time.deltaTime);
+    }
+
+    /// <summary>用本帧水平速度驱动动画 Blend Tree（Speed / ForwardSpeed / StrafeSpeed 参数）</summary>
+    private void LateUpdate()
+    {
+        if (_animator == null) return;
+        // 世界速度转角色本地速度，用于 2D Blend Tree 方向判断
+        Vector3 localVelocity = transform.InverseTransformDirection(_horizontalVelocity);
+        _animator.SetFloat("Speed", _horizontalVelocity.magnitude);
+        _animator.SetFloat("ForwardSpeed", localVelocity.z);
+        _animator.SetFloat("StrafeSpeed", localVelocity.x);
+        // 通知动画状态机是否在地面，用于跳跃落地后退出 Jump 状态
+        _animator.SetBool("Grounded", _characterController.isGrounded);
     }
 
     private void HandleMovement()
@@ -69,10 +95,10 @@ public class PlayerController : MonoBehaviour
         if (_coverController != null && _coverController.IsCrouching)
             currentSpeed *= _coverController.crouchSpeedMultiplier;
 
-        if (moveInput.magnitude > 0.1f)
-        {
-            _characterController.Move(moveDirection.normalized * currentSpeed * Time.deltaTime);
-        }
+        // 记录本帧水平速度（无输入时归零），实际位移由 ApplyCombinedMove 统一执行
+        _horizontalVelocity = moveInput.magnitude > 0.1f
+            ? moveDirection.normalized * currentSpeed
+            : Vector3.zero;
     }
 
     private void HandleGravity()
@@ -83,10 +109,21 @@ public class PlayerController : MonoBehaviour
             _verticalVelocity = -2f;
 
         if (_inputHandler != null && _inputHandler.IsJumpPressed() && _characterController.isGrounded)
+        {
             _verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
 
+            // 动态计算动画播放速度：让完整跳跃动画精确匹配实际空中时间
+            float animDuration = 0.6f; // rifle jump.fbx 时长（18帧/30fps）
+            float airTime = 2f * Mathf.Sqrt(2f * jumpHeight / Mathf.Abs(gravity));
+            float jumpSpeed = animDuration / airTime;
+            if (_animator != null)
+            {
+                _animator.SetFloat("JumpSpeed", jumpSpeed);
+                _animator.SetTrigger("Jump");
+            }
+        }
+
         _verticalVelocity += gravity * Time.deltaTime;
-        _characterController.Move(new Vector3(0f, _verticalVelocity, 0f) * Time.deltaTime);
     }
 
     private void HandleLook()

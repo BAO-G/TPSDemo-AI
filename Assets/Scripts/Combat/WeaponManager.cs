@@ -9,8 +9,12 @@ public class WeaponManager : MonoBehaviour
 {
     public Transform weaponHolder;
 
+    [Header("武器槽位（按 1/2/3 切换：0=步枪 1=冲锋枪 2=手枪）")]
+    public GameObject[] weapons;
+
     private FirearmWeapon _currentWeapon;
     private PlayerInputHandler _inputHandler;
+    private int _currentWeaponIndex;   // 当前武器槽位索引
 
     // 弹药变化事件（弹匣当前/弹匣最大），供 HUD 监听
     public event Action<int, int> OnAmmoChanged;
@@ -40,7 +44,14 @@ public class WeaponManager : MonoBehaviour
 
     private void Update()
     {
-        if (_currentWeapon == null || _inputHandler == null) return;
+        if (_inputHandler == null) return;
+
+        // 切枪检测（武器不存在时也允许切换）
+        int switchIndex = _inputHandler.GetWeaponSwitchIndex();
+        if (switchIndex >= 0)
+            TrySwitchWeapon(switchIndex);
+
+        if (_currentWeapon == null) return;
 
         if (_inputHandler.IsShootPressed())
             _currentWeapon.Shoot();
@@ -63,6 +74,18 @@ public class WeaponManager : MonoBehaviour
             _lastReserve = reserve;
             OnReserveAmmoChanged?.Invoke(reserve);
         }
+    }
+
+    /// <summary>按槽位索引切枪：越界/空槽/重复切换均忽略</summary>
+    public void TrySwitchWeapon(int index)
+    {
+        if (weapons == null || index < 0 || index >= weapons.Length || weapons[index] == null)
+            return;
+        if (index == _currentWeaponIndex && _currentWeapon != null)
+            return;
+
+        _currentWeaponIndex = index;
+        EquipWeapon(weapons[index]);
     }
 
     public void EquipWeapon(GameObject weaponPrefab)

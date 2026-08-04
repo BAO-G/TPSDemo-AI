@@ -1,6 +1,6 @@
-# TPS 战术射击游戏 — 开发日志
+﻿# TPS 战术射击游戏 — 开发日志
 
-> 最后更新：2026-08-03 | 当前阶段：阶段 1 完成 → 待进入阶段 2
+> 最后更新：2026-08-04 | 当前阶段：阶段 3 + 动画大修完成 → 待进入阶段 4
 
 ---
 
@@ -106,7 +106,7 @@ SampleScene (8 根对象)
 
 新对话启动后发送：
 ```
-@architect 请读取 Assets/DEVLOG.md 了解项目现状，然后规划阶段 2 战术系统
+@architect 请读取 Assets/DEVLOG.md 了解项目进度，规划阶段 4 打磨：音效/特效/死亡动画/手感/性能
 ```
 
 日常开发：
@@ -117,3 +117,408 @@ SampleScene (8 根对象)
 ```
 
 每个 coder 完成必须 `read_console` 检查编译错误。
+
+---
+
+## 阶段 2 完成状态
+
+> 完成日期：2026-08-03 | 编译：0 错误 0 警告
+
+### 新增脚本（4 个）
+| 文件 | 说明 |
+|------|------|
+| `Assets/Scripts/Player/PlayerADSController.cs` | ADS 瞄准：FOV 60→40、武器贴枪、ADS 进度暴露 |
+| `Assets/Scripts/Player/PlayerCoverController.cs` | 掩体/蹲伏：C 键降低 CharacterController 高度 + 减速 |
+| `Assets/Scripts/Combat/AmmoPickup.cs` | 弹药拾取物（Trigger，自动补备弹） |
+| `Assets/Scripts/Combat/HealthPickup.cs` | 医疗包拾取物（Trigger，自动补医疗包） |
+
+### 修改脚本（8 个）
+| 文件 | 修改要点 |
+|------|----------|
+| `WeaponData.cs` | +adsSpreadMultiplier、+reserveAmmoMax、+ammoPickupAmount |
+| `PlayerInputHandler.cs` | +IsCrouchHeld()、+IsHealPressed() |
+| `PlayerController.cs` | +CurrentHealth属性、整合 ADS/掩体减速 |
+| `FirearmWeapon.cs` | +备弹池 _reserveAmmo、+ADS散布倍率、换弹从备弹扣除 |
+| `WeaponManager.cs` | +OnReserveAmmoChanged 事件 |
+| `PlayerHealth.cs` | +TryHeal()消耗医疗包、+maxMedkits上限5、+OnMedkitChanged |
+| `UIManager.cs` | 红屏→径向红影（RedVignette）、弹药格式"弹匣/备弹"、医疗包显示 |
+| `EnemyBase.cs` | 未修改（阶段1已有） |
+
+### 新增资产
+| 文件 | 说明 |
+|------|------|
+| `Assets/Textures/RedVignette.png` | 256×256 径向渐变纹理（60%半径起→边缘红色，alpha=128） |
+| `Assets/Input/PlayerInput.inputactions` | +Crouch(C键)、+Heal(H键) |
+
+### 按键一览
+| 按键 | 功能 |
+|------|------|
+| 鼠标右键按住 | ADS 瞄准（FOV 60→40、散布缩小、武器贴枪、移速减半） |
+| C 键按住 | 蹲伏/掩体（高度 2m→1m、移速减半） |
+| H 键按下 | 消耗医疗包恢复 30 血（满血时无效，上限 5 个） |
+| R 键按下 | 换弹（从备弹池扣除，备弹=0 无法换弹） |
+
+### 已知坑（阶段2追加）
+6. PlayerADSController 通过 `GameObject.Find("TPSCamera")` 查找摄像机，改名会断
+7. AmmoPickup / HealthPickup 脚本存在但场景中无实例，需在阶段3手动放置
+8. ADS 和蹲伏减速可叠加（0.5×0.5=0.25x），手感可能过慢
+9. 医疗包初始 3 个，上限 5 个
+
+---
+
+## 对话流程速查（阶段2）
+```
+@architect 规划阶段2 → 派 @coder 执行 Task 0~5 → @explore 审查 →
+修复 M1-M3 缺陷 + 优化红影 → 完成
+```
+
+## 下一阶段
+阶段 4：打磨 — 音效（射击/换弹/受伤）、命中粒子、敌人死亡动画、手感微调、性能优化
+
+---
+
+## 阶段 3 完成状态
+
+> 完成日期：2026-08-03 | 编译：0 错误 0 警告 | NavMesh 烘焙：79ms
+
+### 关卡结构（60×60m 测试场，LevelGround + NavMeshSurface）
+
+```
+SampleScene 新增分组
+├── LevelGround（60×60 Plane + NavMeshSurface，已烘焙）
+├── Level_Buildings：村庄区（House×2/仓库/木屋/帐篷）+ 东南小楼 + 靶场（Range_Wall×3/靶×2）
+├── Level_Cover：集装箱×4 + 油桶/木箱/轮胎堆/反坦克锥/沙堤等 22 件掩体
+├── Level_Roads：主干道 Road_Straight×5（沿 Z 轴）
+├── Level_Scenery：树×10/灌木×3/远山×4/云×4/铁丝网×6
+├── Level_Vehicles：残骸×3（轿车/卡车/ buggy，作掩体）+ 完好×2（装甲车/轿车，装饰）
+├── Enemies：8 敌人（士兵×4/侦察×2/重装×2）
+├── PatrolPoints：WP_Village/Container/Range 共 8 路点
+└── Pickups：弹药堆×3 + 医疗箱×2
+旧 Ground（10×10）已停用保留，旧 Enemy_01/02 与旧路点已删除
+```
+
+### 修改脚本（5 个）
+| 文件 | 修改要点 |
+|------|----------|
+| `PlayerInputHandler.cs` | +GetWeaponSwitchIndex()（1/2/3 切枪） |
+| `WeaponManager.cs` | +weapons 槽位数组、+TrySwitchWeapon()、切枪检测前置于武器判空 |
+| `EnemyBase.cs` | +Animator 挂钩（LateUpdate 同步 Speed、攻击 Fire 触发） |
+| `FirearmWeapon.cs` | +射击 Fire/换弹 Reload 动画触发 |
+| `PlayerController.cs` | +动画 Speed/Jump 驱动、关闭 Root Motion |
+
+### 新增资产
+| 文件 | 说明 |
+|------|------|
+| `Assets/Data/SMGData.asset` | 冲锋枪：伤害15/900RPM/40发/备弹160 |
+| `Assets/Data/PistolData.asset` | 手枪：伤害30/300RPM/12发/备弹60 |
+| `Assets/Prefabs/Weapon_SMG.prefab` / `Weapon_Pistol.prefab` | 武器包装预制体（复制步枪结构换模型换数据） |
+| `Assets/Prefabs/Enemy_Soldier/Scout/Heavy.prefab` | 三变体敌人（军人/运动装/佣兵模型 + 差异化血量速度伤害） |
+| `Assets/Prefabs/AmmoPickup_Pile.prefab` / `HealthPickup_MedBox.prefab` | 拾取物（弹药堆/医疗箱模型） |
+| `Assets/AnimControllers/CharacterAnimator.controller` | 人形共用控制器：Locomotion BlendTree(0/3/7) + Fire/Reload/Jump 状态 |
+| `Assets/Input/PlayerInput.inputactions` | +SwitchWeapon1/2/3（1/2/3 键） |
+
+### 动画接入说明
+- Basic Shooter Pack 16 个 Mixamo FBX 已从 Generic 批量重导入为 Humanoid（自动 Avatar 映射）
+- PolygonBattleRoyale 角色预制体自带人形 Avatar（CharactersAvatar），与 Mixamo 动画直接兼容
+- 玩家绿色 Cube 已替换为 Character_MilitaryMale_01
+
+### 按键新增
+| 按键 | 功能 |
+|------|------|
+| 1 / 2 / 3 | 切换步枪 / 冲锋枪 / 手枪 |
+
+### 已知坑（阶段3追加）
+10. Mixamo 动画若后续新增，必须确认 Rig 为 Humanoid，否则 Blend Tree 不驱动
+11. 场景静态布局变更后需重新调 NavMeshSurface.BuildNavMesh 烘焙
+12. 射击/换弹为全身覆盖状态（无上身在 mask），开火瞬间会短暂打断跑动动画
+13. 敌人远程攻击（15m）才播射击动画，无命中特效（留待阶段 4）
+14. 旧 Ground 停用未删，确认无问题后可移除
+15. 载具均为静态摆放，无驾驶功能（已确认方案）
+
+---
+
+## 阶段 3 热修复（2026-08-03 用户反馈）
+
+> 编译：0 错误 0 警告
+
+### 修复内容
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 枪支错位/枪口朝天 | 阶段3复制预制体时误删步枪主模型、残留枪口配件；且 Polygon 武器模型以 +Y 为枪管方向（枪口在 y=0.94），直接挂入水平挂点导致竖立 | 重建 Weapon_Rifle/SMG/Pistol 三个预制体：直接内嵌 Polygon 原版模型（天然 +Z 向前），重新计算 FirePoint 至包围盒最前端 |
+| ADS 瞄准时枪支坠地 | adsWeaponPosition=(0,-0.15,0.3) 是绝对位置，Lerp 后挂点直接落到 y=-0.15（地面） | PlayerADSController 改为相对偏移：adsPositionOffset=(-0.12, 0.45, 0.15)，抬至眼线并对齐屏幕中线 |
+| 持枪高度与模型不匹配 | WeaponHolder 还在绿色 Cube 时代的位置 (0.3,1.2,0.5) | 移至人形模型右手胸前 (0.12, 1.05, 0.35) |
+| 走/跑无动画（玩家） | **双根因**：① CharacterAnimator 的 Locomotion Blend Tree `m_MaxThreshold=1`（代码创建 BlendTree 默认 0~1，未重算），Speed>1 全部钳制到 idle；② PlayerController 每帧两次 Move（水平+重力分开），第二次 Move 使 `velocity` 只计垂直分量，LateUpdate 读到的水平速度永远为 0 | ① 修正 MaxThreshold=7（与子项阈值 0/3/7 匹配）；② PlayerController 改为单次合并 Move：水平速度存 `_horizontalVelocity` 成员，与垂直速度合并后一次 Move，动画直接用 `_horizontalVelocity.magnitude` 驱动 |
+| 走/跑无动画（敌人） | 仅受 Blend Tree MaxThreshold=1 影响（NavMeshAgent.velocity 无多次 Move 问题） | 同上①，阈值修复后敌人动画自动恢复 |
+
+### 动画问题验证结果（修复后实测）
+- Speed=5 → walking.fbx 权重 0.5 + rifle run.fbx 权重 0.5（阈值 3~7 区间混合，正确）
+- Speed=8 → rifle run.fbx 权重 1.00（正确）
+- 角色实际位移正常，临时验证组件已删除
+- 教训：上轮“动画正常”的结论错误——当时钩子测试用单次 Move 绕过了双 Move 问题，且 Thread.Sleep 阻塞帧更新导致权重读数不可信；动画问题必须在真实输入路径上验证
+
+### 修改文件
+- `Assets/Scripts/Player/PlayerADSController.cs`：adsWeaponPosition/Rotation → adsPositionOffset/RotationOffset（相对偏移）
+- `Assets/Scripts/Player/PlayerController.cs`：双 Move 合并为单次 ApplyCombinedMove，动画改由 _horizontalVelocity 驱动
+- `Assets/AnimControllers/CharacterAnimator.controller`：Locomotion Blend Tree MaxThreshold 1→7
+- `Assets/Prefabs/Weapon_Rifle/SMG/Pistol.prefab`：重建（内嵌原版模型 + 正确 FirePoint）
+- 场景：WeaponHolder 位置更新 + 步枪实例换新
+
+### 已知坑（热修复追加）
+16. WeaponData.weaponPrefab 字段仅用于“无模型时自动实例化”，包装预制体已内嵌模型时该字段不参与逻辑，改数据时不必担心
+17. ADS 偏移可在 Player 的 PlayerADSController 组件上调（相对值，不再受挂点位置影响）
+18. CharacterController 每帧多次 Move 会使 velocity 只反映最后一次位移，动画取速度必须用自行维护的水平速度或合并为单次 Move
+19. 代码创建 BlendTree 后必须确认 min/maxThreshold 与子项阈值一致（默认 0~1 会钳制参数），或用 UseAutomaticThresholds
+
+---
+
+## 阶段 3.5：动画系统大修（2026-08-04 用户反馈）
+
+> 编译：0 错误 0 警告 | 动画使用率：13/16
+
+### 问题与修复
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 射击/换弹时移动 → 人物定住滑步 | Fire/Reload 是 AnyState 全身覆盖动画 | 创建 UpperBody 层（Avatar Mask），Fire/Reload/HitReaction 移到上半身 |
+| 跳跃空中僵硬/落地延迟 | ExitTime 条件 + 拼接动画 | 简化为单状态：rifle jump.fbx 完整弧线，动态计算 JumpSpeed 匹配空中时间，仅 Grounded 条件退出 |
+| 左脚弯曲扭曲 | Idle 与 Walking 在 1D Blend Tree 中 Speed 0~3 范围内持续混合 | Idle 独立成单独状态，与 Locomotion 永不混合；Idle↔Locomotion 通过 Speed 阈值切换 |
+| 只有前向移动动画 | Blend Tree 是 1D Simple | 升级为 2D Freeform Directional：X=StrafeSpeed, Y=ForwardSpeed，8 节点覆盖 360° |
+| 5 个移动动画不循环 | FBX 导入设置 loopTime=false | walking backwards / run backwards / strafe×3 / strafe right 全部改为 loopTime=true |
+| 缺少快速侧移动画 | strafe.fbx / strafe (2).fbx 未加入 | 判定方向后加入 Blend Tree (±7,0) |
+| 受伤无动画反馈 | hit reaction.fbx 未接入 | UpperBody 层新增 HitReaction 状态，PlayerHealth 和 EnemyBase 的 TakeDamage 中触发 |
+
+### 当前 Animator Controller 结构
+
+```
+Base Layer:
+  Idle (默认) ←→ Locomotion (2D Blend Tree, 8节点)
+                  ↓ Jump触发
+                Jump (单动画 + 动态 JumpSpeed)
+
+UpperBody Layer (Avatar Mask):
+  Empty ← AnyState → Fire_Upper / Reload_Upper / HitReaction
+```
+
+### 2D Blend Tree 节点
+
+| X (Strafe) | Y (Forward) | 动画 |
+|:--:|:--:|------|
+| 0 | 0 | walking |
+| 0 | 7 | rifle run |
+| 0 | -3 | walking backwards |
+| 0 | -5 | run backwards |
+| 3 | 0 | strafe right |
+| -3 | 0 | strafe left |
+| 7 | 0 | strafe.fbx（快速右移） |
+| -7 | 0 | strafe (2).fbx（快速左移） |
+
+### 动画使用率（13/16）
+
+| 动画 | 用途 |
+|------|------|
+| rifle aiming idle | Idle 站立 |
+| walking / rifle run | 前向走/跑 |
+| walking backwards / run backwards | 后退走/跑 |
+| strafe left / right / strafe / strafe (2) | 侧移慢/快 |
+| rifle jump | 跳跃 |
+| firing rifle / reloading | 上半身射击/换弹 |
+| hit reaction | 上半身受击 |
+| **toss grenade** | ❌ 未使用 |
+| **turn left** | ❌ 未使用 |
+| **turning right 45°** | ❌ 未使用 |
+
+### 已知坑（本次追加）
+
+20. Idle 和 Locomotion 是两个独立状态，通过 Speed 阈值（>0.3 / <0.2）切换，不再是同一 Blend Tree 的子节点
+21. JumpSpeed 由 PlayerController 根据 jumpHeight 和 gravity 动态计算（animDuration / airTime），改 jumpHeight 后动画速度自动适配
+22. 2D Blend Tree 参数来自世界速度转本地速度（InverseTransformDirection），ForwardSpeed=z, StrafeSpeed=x
+23. UpperBody 层的 Avatar Mask 禁用了下半身（Hips + 双腿），Fire/Reload/Hit 只影响上半身
+24. 6 个 FBX 的 loopTime 通过 ModelImporter 持久化修改，重新导入不会丢失（**注意：部分修改实际未生效，见阶段 3.5 热修复**）
+25. 跳跃高度在 PlayerController.jumpHeight，当前 1.0m（Inspector 序列化值优先于脚本默认值）
+
+---
+
+## 阶段 3.5 热修复（2026-08-04 二次反馈：侧移动画/速度手感）
+
+> 编译：0 错误 0 警告 | 运行时验证：8/8 移动动画全部循环
+
+### 问题与修复
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 右移/左移/后退腿部动画不自然（播一遍后定格滑行） | **DEVLOG 声称已修的 loopTime 实际只生效 3/5**：strafe right / strafe left / walking backwards / run backwards 四个 FBX 的 loopTime 仍为 0，非循环动画在 BlendTree 中播 1~1.4s 后冻结在最后一帧 | 用 SerializedObject 修改 ModelImporter.m_ClipAnimations[].loopTime=true + SaveAndReimport，meta 与运行时 isLooping 双重确认 |
+| 走/跑速度过快（5/8 m/s），与 Mixamo 动画自然步频（走~1.7/跑~4.5）不匹配导致滑步 | walkSpeed=5 sprintSpeed=8 | walkSpeed→3.0、sprintSpeed→6.0（脚本默认值 + 场景 Inspector 序列化值同步修改并保存） |
+
+### 动画-速度匹配说明（无需改 BlendTree）
+- 2D Freeform Directional 按"参数点与节点位置距离"计算权重，速度降到 3/6 后权重自动落到正确区间
+- 实测（Play 模式驱动参数验证）：StrafeSpeed=3 → strafe right 权重 1.00；StrafeSpeed=6 → strafe.fbx 73%+strafe right 24%；ForwardSpeed=6 → rifle run 89%
+- 敌人 patrolSpeed=3/chaseSpeed=6 与玩家 walk/sprint 一致：玩家不跑会被追上、跑了可保持距离
+
+### turn left / turning right 45° 决策（不接入，保留资源）
+- 两者是"原地转身"一次性动画（31 帧≈1s 转 45°）
+- 玩家不接入：TPS 鼠标平滑转向（帧率远超 45°/s），强插转身动画会反复打断移动动画造成滑步抖动，主流 TPS（PUBG/APEX）均不用
+- 敌人不接入：NavMeshAgent 平滑旋转寻路，硬插需暂停寻路+角度检测，与攻击/巡逻状态耦合，收益低风险高
+- 适用场景留待：掩体切角（cover pop-out）、敌人警戒转身、投掷物动作；toss grenade 同理留给手雷功能
+
+### 修改文件
+- `Assets/Animations/Basic Shooter Pack/strafe left.fbx` / `strafe right.fbx` / `walking backwards.fbx` / `run backwards.fbx`：loopTime 0→1
+- `Assets/Scripts/Player/PlayerController.cs`：walkSpeed 5→3、sprintSpeed 8→6
+- `Assets/Scenes/SampleScene.unity`：Player 组件 Inspector 速度值同步（已保存）
+
+### 已知坑（热修复追加）
+26. **loopTime 修复必须用 SerializedObject 改 m_ClipAnimations[].loopTime 再 SaveAndReimport**，改 meta 顶层 `loop` 字段不生效；修完用运行时 `clip.isLooping` 复核，不要信 DEVLOG 历史结论
+27. 场景中 Player 组件序列化的速度值是权威值（脚本默认值只在无序列化值时生效），改速度必须同步场景 Inspector 值并保存场景
+28. 编辑器 execute_code 中模拟的 InputSystem 键盘状态会被 PlayerLoop 重置，无法跨帧模拟持续按键；验证 BlendTree 用直接 SetFloat 参数法（见本次验证方法）
+
+---
+
+## 阶段 3.5 热修复 2（2026-08-04 第三次反馈：移动时脚部/身体向右扭曲）
+
+> 编译：0 错误 0 警告 | 修复后实测：玩家 Hips 偏差 0.1°，敌人 0.6~3.7°（转弯自然姿态）
+
+### 根因
+- **CharactersAvatar（包内 Characters.fbx 生成的共享 Avatar）的 pre-rotation 补偿有系统性误差**：所有使用该 Avatar 的角色（玩家 + 3 种敌人 8 个实例）在动画驱动后 Hips 世界朝向左偏 **-47.7°**（强制 Idle 状态实测三种模型均稳定 -47.7°，此前 ±7° 波动是巡逻/走路动画中 Hips 自身转向）
+- 表现：角色身体整体左偏 47.7°，走路时身体/脚斜向移动方向，看起来"脚向右扭曲"
+- 骨骼树中 Toes_L/Toes_R（脚趾尖）不在 Humanoid 映射中、动画不驱动，保持绑定姿势——但与 bind pose 一致，网格渲染正常，无需处理
+
+### 为什么不能改 Root 骨骼/模型旋转
+- Root 是 Animator 的 **root bone**，每帧被 Animator 覆盖回动画根旋转（实测 Play 中 localRotation 恒为 0），改场景/prefab 的 Root 旋转无效
+- 必须在**动画评估之后**（LateUpdate）对 Hips 做**世界空间绕 Y 补偿**：`hips.rotation = Quaternion.Euler(0f, 47.7f, 0f) * hips.rotation`（刚体旋转，动画姿态不变）
+
+### 修改文件
+- `Assets/Scripts/Player/PlayerController.cs`：LateUpdate 末尾 +Hips 补偿
+- `Assets/Scripts/Enemy/EnemyBase.cs`：LateUpdate 末尾 +Hips 补偿（与玩家同一 47.7°）
+
+### 已知坑（追加）
+29. **CharactersAvatar 系统性 Hips 偏斜 -47.7°**：修改 Hips 骨骼的 pre-rotation 不可行（包内资源且无 API），运行时 LateUpdate 世界空间补偿是标准解法；若未来换 Avatar/模型需重新实测补偿值（强制 Idle 下 Hips 世界 Y - 自身 Y）
+30. 验证动画偏差必须**等待动画状态稳定**（手动 anim.Update 多帧或强制 Idle 后读数），巡逻中读数是动画转向噪声
+31. 敌人走路时 0.6~3.7° 偏差是 NavMeshAgent 转弯滞后（angularSpeed 120°/s），属正常现象，勿当 bug
+
+---
+
+## 阶段 3.5 热修复 3（2026-08-04 第四次反馈：整个人物朝向右边 —— 动画系统终极修复）
+
+> 编译：0 错误 0 警告 | 实测：玩家 Hips 偏差 0.0°，敌人全部 0~4°（转弯自然姿态）
+
+### 为什么上次的 Hips 补偿是错误方向（本次教训）
+- Hips 补偿（+47.7°）后身体骨骼正了，但 **Head 朝右 +90°、Ankle 朝后 180°、四肢/手指全部大偏差**——CharactersAvatar 的 pre-rotation 对 Polygon 怪绑定姿势的补偿是**逐骨骼错乱**的，非单一 Hips 偏差
+- 实测（Idle）40 块骨骼偏差各不相同：Spine -180°、Head +90°、Ankle ±155~180°、手指 ±50~178°
+- 尝试 AvatarBuilder.BuildHumanAvatar 重建（Polygon 绑定姿势 / mixamorig 姿势 / 全 0 姿势 3 种输入）均不可靠（Hips 偏差 37.7° / -136.9°），Unity 算法不可控
+
+### 终极方案：Generic 动画 + 骨骼重命名（不再走 Humanoid retarget）
+1. **16 个动画 FBX 全部改为 Generic 导入**（ModelImporter.animationType=Generic，动画曲线按骨骼路径直接驱动，无 pre-rotation 参与）
+2. **场景骨骼重命名为 mixamorig 名**（UpperLeg_L→mixamorig:LeftUpLeg 等 42 块，按 human 映射对应），曲线路径 `mixamorig:Hips/mixamorig:Spine` 直接匹配
+3. **Hips 直接挂 Animator 根下**（去掉 Root 夹层；Root 是 prefab 实例时需先 UnpackPrefabInstance，否则 SetParent 被 prefab 系统拒绝——这是"SetParent 无效"的真正原因）
+4. **Hips 曲线根旋转修正**：Generic 曲线把动画 FBX 根旋转烘焙进 Hips（各动画 33°~74° 恒定 Y 偏转），生成修正版 `.anim`：`Q'(t) = inv(Q0) × Q(t)`（Q0=首帧），基线归零、动画摆动保留
+5. **BindPoseFixer 组件**（新建 Assets/Scripts/Player/BindPoseFixer.cs）：骨骼参考姿势改变后 Start 时复制网格实例并重算 `mesh.bindposes = bones[i].worldToLocalMatrix`（不修改共享资产）
+6. **UpperBodyGeneric.mask**（新建）：Generic 模式 humanoid 部位 mask 无效，从 Spine 递归 AddTransformPath 生成骨骼路径 mask，替换 UpperBody 层
+
+### 修改文件/资产
+| 类型 | 内容 |
+|------|------|
+| 导入设置 | 16 个动画 FBX：Humanoid→Generic（Basic Shooter Pack 为项目资产，可改） |
+| 动画 | `Assets/Animations/Baked/` 16 个修正版 .anim（Hips 根旋转去除） |
+| 骨骼 | 玩家 PlayerModel + 敌人 prefab×3：骨骼改名 mixamorig + Hips 重挂根 + avatar=null（敌人 prefab 嵌套实例已 Unpack） |
+| 脚本 | 新增 `BindPoseFixer.cs`；`PlayerController.cs`/`EnemyBase.cs` 移除 Hips 补偿代码 |
+| 控制器 | `CharacterAnimator.controller`：13 处动画引用→Baked .anim；UpperBody 层 mask→UpperBodyGeneric |
+| 场景 | SampleScene：玩家骨骼结构/avatar/组件，已保存 |
+
+### 已知坑（追加）
+32. **Polygon 角色 + Mixamo 动画的 Humanoid retarget 系统性不可用**（CharactersAvatar pre-rotation 逐骨骼错乱），正确路线是 Generic 动画 + 骨骼改名 match 曲线路径；改动后 Animator 必须 avatar=null
+33. **prefab 实例内 SetParent 被静默拒绝**（返回成功但父级不变），必须先 PrefabUtility.UnpackPrefabInstance 才能改层级
+34. Generic 动画曲线的骨骼路径**不含动画根对象名**（`mixamorig:Hips/...`），场景骨骼须与 Animator 根同层（Hips 直接挂 Animator 根）
+35. Generic 曲线会把 FBX 根旋转烘焙进 Hips（各动画 33°~74° 恒定偏转），必须用 `inv(Q0)×Q(t)` 修正；验证用 Idle 下 Hips 世界 Y 是否≈0
+36. SkinnedMeshRenderer 没有 mesh 属性（只有 sharedMesh），复制网格实例用 Instantiate(sharedMesh) 后改 bindposes 再赋回
+37. Generic 模式下 UpperBody 层的 humanoid AvatarMask 失效（覆盖全身），需用 TransformPaths 形式 mask（AddTransformPath 递归生成）
+38. prefab 资产修改后**场景中已有实例不会自动同步**，需重新加载场景
+39. Mixamo 动画曲线自带站姿内容：rifle aiming idle 头部 -20°、腿微张（绑定姿势），属动画内容非 bug
+
+---
+
+## 阶段 3.5 热修复 4（2026-08-04 第五次反馈：模型钢丝状 —— 蒙皮绑定矩阵修复）
+
+> 编译：0 错误 0 警告 | 修复后实测：玩家/敌人蒙皮包围盒正常（2.05×1.89×0.54 人形）
+
+### 根因
+- BindPoseFixer 初版在 **Start 时读运行时骨骼世界矩阵**计算 mesh.bindposes，但 Generic Animator 在 Start 前已评估过动画（骨骼已被覆盖为动画姿势）→ 绑定矩阵与顶点数据错乱 → 蒙皮顶点塌到骨骼线上（钢丝状）
+- 教训：**蒙皮绑定矩阵与"运行时骨骼姿势"无关，必须基于固定参考姿势（T-pose）在 Edit 模式预计算**
+
+### 修复
+| 文件 | 内容 |
+|------|------|
+| `Assets/Scripts/Data/BindPoseData.cs`（新建） | ScriptableObject：boneNames[] + bindposes[]（按骨骼名匹配，顺序无关） |
+| `Assets/Data/CharacterBindPose.asset`（新建） | Edit 模式预计算：读玩家激活网格 smr.bones 的 T-pose 世界矩阵求逆，49 块骨骼 |
+| `BindPoseFixer.cs`（重写） | Start 时按骨骼名从 poseData 匹配 bindposes，复制网格实例应用，不读运行时骨骼 |
+| 玩家 PlayerModel + 敌人 prefab×3 | BindPoseFixer 组件赋值 poseData |
+
+### 验证
+- bindpose×boneWorld ≈ 1（绑定一致）；顶点模型空间范围 ±1.02m（T-pose 臂展，网格数据未损坏）
+- 蒙皮世界包围盒：玩家 2.05×1.89×0.54、敌人 1.97×1.89×1.69（含迈步摆腿）——人形正常
+
+### 已知坑（追加）
+40. **bindposes 必须在 Edit 模式基于固定参考姿势预计算**（读骨骼世界矩阵求逆），绝不能运行时读骨骼姿势（Animator 覆盖后全错）
+41. 蒙皮健康度检查：`SkinnedMeshRenderer.bounds` 应接近人形尺寸（约 2×1.8×0.5），若塌成细线/细条即绑定矩阵错乱
+42. BindPoseData 按骨骼名匹配（smr.bones 顺序与资产顺序无关），同一 Characters.fbx 骨架的所有角色共用一份
+
+---
+
+## 阶段 3.5 热修复 5（2026-08-04 最终修复：钢丝状彻底解决 + 蒙皮公式纠正）
+
+> 编译：0 错误 0 警告 | 实测：玩家/8 敌人蒙皮头顶 y≈1.87m 全部人形正常，Hips 偏差 0.0°
+
+### 钢丝状的真正根因链（依次修复）
+1. **T-pose 化未持久化**：骨骼改名（mixamorig）后，T-pose 化映射表键（Polygon 名）不匹配 → 场景骨骼一直是 Polygon 原始绑定姿势，BindPoseData 基于错误姿势生成 → 蒙皮全错
+   - 修复：映射表改用 mixamorig 名，**改完立即 SaveScene**
+2. **参考姿势必须匹配动画曲线基线**：各动画 FBX 骨骼基线不同（LeftFoot 差 139°、手臂 63~99°），单一参考姿势无法匹配全部动画
+   - 修复：**16 个 .anim 全部骨骼归一化**（Q'(t) = inv(Q0) × Q(t)，基线归零），骨骼参考姿势全 0（Hips 及其余全部 identity）
+3. **bindposes 公式错误（本次核心）**：用了 `worldToLocalMatrix`（世界逆），正确公式是 **模型空间逆**：
+   `bindPose[i] = (模型根.worldToLocalMatrix × bones[i].localToWorldMatrix).inverse`
+   - Unity 蒙皮 = 骨骼世界矩阵 × bindPose × 顶点：世界×模型空间逆 自动组合出"模型根×顶点"的世界输出
+   - 文档验证（Mesh.bindposes）：bindPose = 骨骼绑定姿势变换矩阵的逆
+4. **场景实例 override 优先于 prefab**：场景中敌人实例的 BindPoseFixer 引用旧 guid 资产 → 重载场景后为 null
+   - 修复：**直接在场景实例上赋值**（不能只改 prefab）+ 保存场景
+5. **CreateAsset 不覆盖已存在资产**：重复生成 BindPoseData 全部静默失败，数据停留在旧版本
+   - 修复：先 DeleteAsset 再 CreateAsset（safety_checks 放行）
+
+### 最终修复状态
+- 动画：16 个 Baked .anim（全骨骼归一化）+ controller 引用 13 处 + Generic rig
+- 骨骼：玩家 + 敌人 prefab 全部 0 参考姿势（位置保持 Polygon 关节），Hips 挂 Animator 根
+- BindPoseData（模型空间逆，49 骨骼）+ BindPoseFixer（按名匹配应用）
+- 验证：CPU 蒙皮采样玩家头顶 (-4.03, 1.89, -4.06)、脚底 (-4.08, 0.08, -3.87) 完全人形
+
+### 已知坑（追加）
+43. **bindposes 正确公式 = inv(骨骼在网格根空间的矩阵)**（`模型根.worldToLocal × bone.localToWorld` 求逆），不是世界矩阵逆；两者仅当模型根在原点时才等价
+44. **验证蒙皮必须过滤 activeSelf**（组合体有 20 个网格），GetComponentInChildren 默认返回层级第一个（可能非激活）
+45. 场景中 prefab 实例的组件 override 优先于 prefab 资产，改 prefab 后实例引用不更新的场景对象必须直接在实例上改
+46. AssetDatabase.CreateAsset 对已存在路径静默失败（不覆盖不报错），更新资产必须先 DeleteAsset
+47. 动画资产删除后 controller 引用变 missing（motion 判空），重建引用需按状态名/BlendTree 节点位置显式设置
+
+---
+
+## 阶段 3.5 回滚（2026-08-04：动画系统探索失败，恢复对话开始状态）
+
+> 背景：本日多次尝试修复动画/蒙皮问题（loopTime、Hips 补偿、Avatar 重建、Generic 化、骨骼改名、bindposes 重算），最终导致模型显示异常（朝向错乱/钢丝状/T-pose）。由于 git 仅有阶段 2 提交（阶段 3/3.5 未提交），无法用 git 精确回退，采用**手动重建恢复**。
+
+### 恢复内容
+| 项目 | 操作 |
+|------|------|
+| 16 个动画 FBX | Generic → **Humanoid**（重新导入） |
+| CharacterAnimator.controller | 引用 Baked .anim → **FBX clip**（13 处）+ UpperBody 层 mask → **UpperBodyMask** |
+| 玩家 PlayerModel | 删除被破坏的组合体 → **重新实例化包内 Character_MilitaryMale_01.prefab**（Animator=CharacterAnimator + CharactersAvatar + applyRootMotion=false） |
+| 8 个敌人 | 删除 → **重建**（包内角色 prefab + EnemyBase/NavMeshAgent/CapsuleCollider + 原位置/朝向/路点分配/差异化数值） |
+| 速度 | 恢复 walk=5 / sprint=8（脚本 + 场景），**用户确认后改回并保留 walk=3 / sprint=6（降速需求）** |
+| 清理 | 删除 Baked/、BindPoseFixer.cs、BindPoseData.cs、UpperBodyGeneric.mask、CharacterBindPose.asset、PlayerAvatar 测试资产、旧敌人 prefab×3 |
+
+### 恢复后状态（= 对话开始时）
+- 玩家/敌人：原生 Polygon 模型 + CharactersAvatar + Humanoid Mixamo 动画（含 47.7° Hips 朝向偏差的已知小瑕疵）
+- 敌人 prefab 已删除（场景实例为无 prefab 关联对象，后续如需可重新制作）
+- 编译 0 错误，场景已保存
+
+### 教训（重要）
+48. **git 提交必须在每个阶段完成后立即执行**（本次因阶段 3/3.5 未提交，恢复只能手动重建，工作量巨大且易错）；建议恢复确认后立即提交
+49. Polygon 骨骼 + Mixamo Humanoid 动画的 retarget 偏差（47.7° 等）是已知限制，若要根治需专用工具链（烘焙/重定向），不建议在运行时盲目补偿
+
+---
+
+## 下一阶段
+阶段 4：打磨 — 音效（射击/换弹/受伤/脚步）、命中粒子特效、敌人死亡动画、手雷功能（toss grenade）、掩体切角（turn 动画挂载点）、UI 美化、性能优化
