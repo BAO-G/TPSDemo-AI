@@ -520,5 +520,51 @@ UpperBody Layer (Avatar Mask):
 
 ---
 
+## 会话 2 记录（2026-08-04：动画问题深入排查 → 回滚 → 换 P08 模型 → TPS 动画测试）
+
+> 本段记录 83e041e 提交后的全部工作与结论，供下一轮对话直接续接。
+
+### 一、本次会话时间线
+1. **初始动画讨论**（已归档）：turn left/turn right 决策不接入、4 个移动动画 loopTime 修复、速度降为 3/6
+2. **朝向问题链**：Hips 偏 -47.7° → 试 Hips 补偿/BuildHumanAvatar/Root 旋转均失败 → Generic 化+骨骼改名+蒙皮重算导致钢丝状 → **手动回滚重建** → **git 提交 83e041e**
+3. **动画烘焙方案试水**：创建 TestBake 测试场景 + AnimationBaker 工具，最终 CPU 验证走路蒙皮成功（头顶 1.83m/脚底 -0.05m），但用户看到测试场景麻花 → **放弃，删除全部测试产物，git 恢复干净**
+4. **CSDN 文章评估**（Configure Avatar Force T-Pose 法）：方向正确（改 Avatar 参考姿势，不动蒙皮，无钢丝风险），需手动操作 + 自有资源
+5. **换 P08 模型**：P08_Federica_Plain_C Variant 移植为玩家模型（替换 PlayerModel）——功能/动画/网格全部成功，但 **P08 也是 Polygon 骨骼（Hips 绑定 270°），同样 -47.7° 偏差**
+6. **TPS Shooter 动画测试**：导入 Humanoid/ 目录动画 → 实测能 retarget 到 P08，但**偏差依旧（证伪"Mixamo 动画问题"假设）**；TPS 动画自带 Avatar 不能用（骨骼不匹配，动画不驱动）；替换走/跑为 TPS 动画 → 偏差 60° 更严重
+
+### 二、当前项目状态（未提交变更）
+```
+M  Assets/AnimControllers/CharacterAnimator.controller   ← 前向走/跑节点已换成 TPS walk/run
+?? Assets/Animations/Humanoid/                          ← TPS Shooter 动画资源（Equiped/Freehands/Vehicle）
+?? Assets/Animations/WeaponPickUp/                      ← 拾取动画
+?? Assets/Animations/rifle runT.fbx                     ← 用户测试用动画
+?? Assets/P08_Federica/                                 ← P08 角色模型（自有资源，含 liltoon shader）
+?? Packages/jp.lilxyzw.liltoon-2.3.3/ + ProjectSettings/lilToonSetting.json
+M  Assets/Scenes/SampleScene.unity                      ← 玩家模型已换成 P08（PlayerModel=P08 实例）
+```
+- 玩家 = P08_Federica_Plain_C Variant（Player 子物体 PlayerModel，Animator=CharacterAnimator + P08 自带 Avatar + applyRootMotion=false）
+- 玩家速度 walk=3/sprint=6；敌人 士兵追5.5/侦察6.5/重装3.5
+- 编译 0 错误
+
+### 三、核心结论（重要认知）
+1. **47.7° 偏差与动画源无关**：Mixamo 与 TPS 动画 retarget 到 Polygon 模型都偏（实测 TPS 偏 60° 更明显）；偏差由**目标模型骨骼绑定姿势 + Avatar pre-rotation** 决定
+2. **P08 也中招**：P08 Hips 绑定旋转 (0,270,0)、skeleton_P08 (270,0,0)，绑定姿势 Hips 世界前向 = -X（非标准），同样是 Polygon 骨骼问题
+3. **Configure 里看着标准 ≠ pre-rotation 正确**：Configure 显示参考姿势（经归一化）/网格 bind pose 补偿，但运行时 pre-rotation 实际补偿误差 -47.7°
+4. **TPS 动画自带 Avatar 不能移植**：Avatar 必须匹配模型骨骼（实测换 TPS Avatar 后动画完全不驱动）
+5. **唯一根治方向**：**Configure P08 自己 Avatar → Force T-Pose / Apply 重新生成**（P08 是自有资源 Assets/P08_Federica/，可改）——尚未执行，待尝试
+
+### 四、待决策/待办
+- [ ] **走/跑动画去留**：当前前向走/跑已换成 TPS（偏差 60° 更差），建议还原回 Mixamo，待用户确认
+- [ ] **Configure P08 Avatar 修复偏差**（Force T-Pose → Apply），成功后验证 Hips 是否归 0
+- [ ] **提交 git**：P08 移植 + TPS 动画导入 + controller 改动（确认后提交，防再丢进度）
+- [ ] 阶段 4 玩法开发
+
+### 五、关键资源路径
+- P08 模型：`Assets/P08_Federica/Model_Data/fbx/P08_Federica_forUnity_250729.fbx`（Avatar 名 P08_Federica_forUnity_250729Avatar）
+- TPS 动画：`Assets/Animations/Humanoid/EquipedAnimations/`（持枪：Walk/run/Idle/Reload/RifleEquip/Jump/Death/Crouch）
+- 玩家控制器：`Assets/AnimControllers/CharacterAnimator.controller`（BlendTree 节点0/1 当前为 TPS 动画）
+
+---
+
 ## 下一阶段
 阶段 4：打磨 — 音效（射击/换弹/受伤/脚步）、命中粒子特效、敌人死亡动画、手雷功能（toss grenade）、掩体切角（turn 动画挂载点）、UI 美化、性能优化
