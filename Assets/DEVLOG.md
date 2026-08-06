@@ -1,6 +1,6 @@
 ﻿# TPS 战术射击游戏 — 开发日志
 
-> 最后更新：2026-08-04 | 当前阶段：阶段 3 + 动画大修完成 → 待进入阶段 4
+> 最后更新：2026-08-07 | 当前阶段：阶段 3.6 移动/武器/准星完善完成 → 待进入阶段 4（打磨）
 
 ---
 
@@ -563,6 +563,112 @@ M  Assets/Scenes/SampleScene.unity                      ← 玩家模型已换�
 - P08 模型：`Assets/P08_Federica/Model_Data/fbx/P08_Federica_forUnity_250729.fbx`（Avatar 名 P08_Federica_forUnity_250729Avatar）
 - TPS 动画：`Assets/Animations/Humanoid/EquipedAnimations/`（持枪：Walk/run/Idle/Reload/RifleEquip/Jump/Death/Crouch）
 - 玩家控制器：`Assets/AnimControllers/CharacterAnimator.controller`（BlendTree 节点0/1 当前为 TPS 动画）
+
+---
+
+## 会话 3 记录（2026-08-06~07：移动动画重建、武器 IK、准星系统）
+
+> 本段记录 984e409 提交后的全部工作与结论，供下一轮对话直接续接。
+
+### 一、时间线
+
+1. **武器双挂点方案失败并回滚**：最初尝试 HipHolder/ADSHolder 双挂点（武器移 Player 根），期间误删 WeaponHolder、搞坏场景内存缓存，git checkout 后因编辑器未重载场景导致问题依旧；最终强制重载磁盘场景恢复
+2. **移动动画"定住/极慢"根因链**：
+   - ① git 提交的 controller 中 Locomotion/Crouch 的 motion=NULL（BlendTree 从未持久化）
+   - ② 代码重建 BlendTree 子节点时未设 `timeScale` → 序列化为 **0.01（1% 播放速度）** → "慢到像静止"
+   - ③ **状态转换从未持久化**：`AddTransition` 创建的 AnimatorStateTransition 未 `AddObjectToAsset` 注册 → 磁盘 YAML 引用全 `fileID: 0`；iKPass 的 `controller.layers = layers` 操作破坏内存缓存后彻底失效 → "只有位移无动画"
+3. **状态机按 TPS Shooter 重建**（对照 `K:\Unity\UnityProject\TPS Shooter`）：Walking/Running 分离 + ±1.0 归一化 BlendTree + 仅前向冲刺
+4. **武器 IK 系统**：武器挂右手 hand_R + 左手护木 IK（Unity 内置 Animator IK）
+5. **准星系统**（A+B）：复制 TPS crosshair.png + CrosshairController 敌人变色
+
+### 二、移动动画重建（PlayerAnimator.controller）
+
+```
+Base Layer:
+  Idle ←→ Walking Locomotion (Speed>0.3 / <0.2)
+  Walking ↔ Running Locomotion (IsRun)
+  Walking/Running → Jump (Jump) → Walking (Grounded)
+  Walking/Running → Crouch (IsCrouch) → Walking (IsCrouch off)
+  AnyState → Die (Died)
+
+Walk2D (9节点 ±1.0)：Idle Aiming(0,0) + walk_fwd/bwd/left/right(±1) + walk_45×4(±0.7)
+Run2D (6节点 ±1.0，照抄 TPS)：run_45_left(-0.7,0.7) run(0,1) run_45_right(0.7,0.7) idle(0,0) walk_left(-1,0) walk_right(1,0)
+Crouch2D (9节点 ±1.0)：crouch_idle + 8 方向 crouch_walk
+```
+
+**关键设计（与 TPS Shooter 一致）**：
+- BlendTree 节点坐标 **±1.0 归一化**（参数 ForwardSpeed/StrafeSpeed = 实际速度/目标速度）
+- **只有前向（localVelocity.z>0.3）才 IsRun=true 并加速**，后退/横移按 Shift 用走路速度 → Run2D 不需要后退节点
+- PlayerController.LateUpdate：`ForwardSpeed = localVelocity.z / normSpeed`、`IsRun = sprint && forward`
+
+### 三、三个动画"定住/极慢"根因（重要教训）
+
+| 根因 | 现象 | 修复 |
+|------|------|------|
+| BlendTree motion=NULL（git 提交版本缺失）| 移动无动画 | 重建 Locomotion2D/Crouch2D + `AddObjectToAsset` 持久化 |
+| **ChildMotion.timeScale 未初始化 → 0.01** | 动画慢到静止 | 遍历所有 BlendTree 子节点设 `timeScale=1, cycleOffset=0` |
+| **AnimatorStateTransition 未 AddObjectToAsset** | 切枪后全无动画（磁盘 fileID=0，iKPass 操作破坏内存缓存后暴露）| 重建全部转换 + `AddObjectToAsset` 注册，验证磁盘 YAML fileID 非 0 |
+
+**教训**：
+50. 代码创建 BlendTree 子节点必须显式设 `timeScale=1`（C# struct 默认序列化为 0.01）
+51. **AddTransition 创建的转换对象必须 `AssetDatabase.AddObjectToAsset` 注册**，否则磁盘引用 fileID=0（内存正常但重载丢失）
+52. **禁用 `controller.layers = layers` 修改层属性**（会破坏未注册对象引用），改 iKPass 等层字段后必须重导入验证
+53. `AssetDatabase.ImportAsset(path, ForceUpdate)` 可强制从磁盘重载（覆盖损坏的内存缓存）
+54. 恢复场景要用"新建临时场景→重新加载目标场景"强制丢弃编辑器内存状态（git checkout 只改磁盘）
+
+### 四、武器 IK 系统（手部贴合）
+
+```
+Player/P08.../skeleton/.../hand_R（武器挂右手，用户手动改，Humanoid 骨骼 reparent 被 Unity 拒绝）
+  └── WeaponHolder (scale 0.5)
+      └── Weapon_Rifle/SMG/Pistol
+          ├── Model / FirePoint
+          └── LeftHandIk（护木 IK 目标挂点）
+```
+
+- **PlayerIKController.cs**（挂 P08 模型上，OnAnimatorIK 必须与 Animator 同对象）：左手位置 IK 吸附 LeftHandIk，旋转权重 0（保留动画朝向）；换弹时左手权重归零（`FirearmWeapon.IsReloading`）
+- **Base Layer iKPass=true**（OnAnimatorIK 触发前提）
+- **武器预制体**：三把武器都设置挂枪姿势（localPos/localRot）+ LeftHandIk 挂点；`WeaponManager.EquipWeapon` 不再重置 local（用预制体值）→ 切枪后手部贴合
+- 实测：Rifle 握把→右手 0.006 / 左手→护木 0.000；SMG 0.021；Pistol 0.044
+
+**教训**：
+55. **Humanoid 骨骼层级受保护，prefab 内 SetParent 被静默拒绝**（返回成功父级不变）
+56. **给预制体加子物体必须"实例化临时副本→修改→SaveAsPrefabAsset 覆盖"**，`new GameObject + SetParent(预制体资产)` 不会保存
+57. `OnAnimatorIK` 回调只由**挂载脚本的 GameObject 上的 Animator** 触发，脚本必须与 Animator 同对象
+58. Humanoid 的 `OnAnimatorIK` 需要某层启用 **IK Pass**（`layer.iKPass=true`）
+59. 武器挂右手骨骼后**右手不能用 IK**（形成 手→武器→挂点→手 反馈循环），只左手 IK 到护木
+60. 验证 IK 生效用"移动挂点看手是否跟随"，`GetIKPositionWeight` 在 execute_code 里读到的值不可靠（读取时机）
+
+### 五、准星系统（A+B）
+
+- `Assets/UI/crosshair.png`（复制 TPS Shooter，Sprite 导入 128×128）
+- Canvas/Crosshair：屏幕中心 48×48 Image
+- **CrosshairController.cs**（挂 Canvas）：每帧 `Camera.main` 屏幕中心射线 → `hit.collider.GetComponentInParent<EnemyBase>()` → 命中敌人变红，否则白色
+- 射线与射击同源（屏幕中心），所见即所射
+
+### 六、清理
+
+- 删除场景根 3 个游离 LeftHandIk 残留（new GameObject 失败留下的垃圾对象）
+- cullingMode：CullUpdateTransforms → **AlwaysAnimate**（角色短暂出视野动画冻结的隐患）
+
+### 七、当前文件清单（新增/修改）
+
+| 文件 | 说明 |
+|------|------|
+| `Assets/Scripts/Player/PlayerIKController.cs` | 新建：左手护木 IK |
+| `Assets/Scripts/UI/CrosshairController.cs` | 新建：准星 + 敌人变色 |
+| `Assets/Scripts/Combat/FirearmWeapon.cs` | +IsReloading 属性 |
+| `Assets/Scripts/Combat/WeaponManager.cs` | EquipWeapon 不重置 local |
+| `Assets/Scripts/Player/PlayerController.cs` | 参数归一化 + IsRun 前向冲刺 |
+| `Assets/AnimControllers/PlayerAnimator.controller` | Walking/Running/Crouch BlendTree ±1.0 + 转换持久化 + iKPass |
+| `Assets/Prefabs/Weapon_Rifle/SMG/Pistol.prefab` | 挂枪姿势 + LeftHandIk |
+| `Assets/UI/crosshair.png` | 准星贴图 |
+| `Assets/Scenes/SampleScene.unity` | 场景同步 |
+
+### 八、遗留/待办
+
+- [ ] Pistol 握把贴合 0.044 可微调（预制体 localPosition）
+- [ ] 阶段 4：音效 / 粒子 / 敌人死亡 / 手雷 / 性能
 
 ---
 

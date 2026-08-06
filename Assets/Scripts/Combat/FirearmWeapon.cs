@@ -124,6 +124,9 @@ public class FirearmWeapon : MonoBehaviour
             && _reserveAmmo > 0 && !_isReloading;
     }
 
+    /// <summary>是否正在换弹（供 IK 控制器判断左手是否让位）</summary>
+    public bool IsReloading => _isReloading;
+
     /// <summary>补充备弹（弹药拾取物调用）</summary>
     public void AddReserveAmmo(int amount)
     {

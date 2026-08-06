@@ -100,8 +100,7 @@ public class WeaponManager : MonoBehaviour
             Destroy(_currentWeapon.gameObject);
 
         var weapon = Instantiate(weaponPrefab, weaponHolder);
-        weapon.transform.localPosition = Vector3.zero;
-        weapon.transform.localRotation = Quaternion.identity;
+        // 位置/旋转使用武器预制体内保存的挂枪姿势（不再重置，否则切枪后武器偏离双手）
 
         _currentWeapon = weapon.GetComponent<FirearmWeapon>();
         if (_currentWeapon == null)

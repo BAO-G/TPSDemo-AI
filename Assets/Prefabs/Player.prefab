@@ -75,7 +75,7 @@ RotationConstraint:
   serializedVersion: 2
   m_Weight: 0.5
   m_RotationAtRest: {x: -0.0011915724, y: -0.0015210195, z: 90.00001}
-  m_RotationOffset: {x: 9.609244, y: 8.4739895, z: -170.81451}
+  m_RotationOffset: {x: 15.668344, y: 19.718868, z: -166.14778}
   m_AffectRotationX: 1
   m_AffectRotationY: 1
   m_AffectRotationZ: 1
@@ -964,7 +964,7 @@ RotationConstraint:
   serializedVersion: 2
   m_Weight: 0.5
   m_RotationAtRest: {x: 57.48811, y: -2.8118827, z: 177.6291}
-  m_RotationOffset: {x: -56.925674, y: -4.833332, z: -1.2445471}
+  m_RotationOffset: {x: -35.3043, y: 56.63865, z: -69.77401}
   m_AffectRotationX: 1
   m_AffectRotationY: 1
   m_AffectRotationZ: 1
@@ -2275,7 +2275,7 @@ RotationConstraint:
   serializedVersion: 2
   m_Weight: 0.5
   m_RotationAtRest: {x: 46.73005, y: 173.34589, z: 142.57558}
-  m_RotationOffset: {x: -40.4525, y: 0.074944496, z: -31.506506}
+  m_RotationOffset: {x: -43.093575, y: -12.064934, z: -19.497034}
   m_AffectRotationX: 1
   m_AffectRotationY: 1
   m_AffectRotationZ: 1
@@ -2551,14 +2551,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1375302784291474506}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.16060986, y: -0.7271846, z: -0.43532693, w: -0.5058631}
-  m_LocalPosition: {x: -0.079, y: 0.129, z: 0.012}
-  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
+  m_LocalRotation: {x: -0.44021454, y: -0.6993299, z: -0.43610063, w: 0.35632166}
+  m_LocalPosition: {x: -0.023, y: 0.198, z: 0.132}
+  m_LocalScale: {x: 0.5, y: 0.49999988, z: 0.49999994}
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 3251228706807498301}
-  m_Father: {fileID: 2660135612388049924}
-  m_LocalEulerAnglesHint: {x: -52.714, y: 100.383, z: 19.965}
+  m_Father: {fileID: 9001091189420679424}
+  m_LocalEulerAnglesHint: {x: 247.469, y: 17.373001, z: -127.272}
 --- !u!1 &1392950951765071680
 GameObject:
   m_ObjectHideFlags: 0
@@ -4947,7 +4947,7 @@ RotationConstraint:
   serializedVersion: 2
   m_Weight: 0.5
   m_RotationAtRest: {x: 46.730045, y: 6.6543117, z: -142.57558}
-  m_RotationOffset: {x: -46.07681, y: -13.889944, z: 38.166286}
+  m_RotationOffset: {x: -36.422337, y: 41.629833, z: -28.662077}
   m_AffectRotationX: 1
   m_AffectRotationY: 1
   m_AffectRotationZ: 1
@@ -5275,7 +5275,7 @@ RotationConstraint:
   serializedVersion: 2
   m_Weight: 0.5
   m_RotationAtRest: {x: 0, y: -179.9999, z: -90.00001}
-  m_RotationOffset: {x: 6.5901647, y: -2.272684, z: 93.78634}
+  m_RotationOffset: {x: 3.6351526, y: -5.6001053, z: 102.670586}
   m_AffectRotationX: 1
   m_AffectRotationY: 1
   m_AffectRotationZ: 1
@@ -5876,15 +5876,15 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3245604993977370077}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.00000002235173, y: 0.11103555, z: -0.00000005960461, w: 0.9938165}
-  m_LocalPosition: {x: -0.061, y: 0, z: -0.091}
+  m_LocalRotation: {x: -0.009241962, y: 0.15245053, z: 0.0060575563, w: 0.9882493}
+  m_LocalPosition: {x: -0.39, y: 0.033, z: -0.115}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2576185452549200659}
   - {fileID: 8704499706535481559}
   m_Father: {fileID: 8459842496085334159}
-  m_LocalEulerAnglesHint: {x: 0, y: 12.75, z: 0}
+  m_LocalEulerAnglesHint: {x: -1.153, y: 17.534, z: 0.525}
 --- !u!33 &3276628507554054971
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -6111,7 +6111,7 @@ RotationConstraint:
   serializedVersion: 2
   m_Weight: 0.5
   m_RotationAtRest: {x: 0, y: 0.00010890928, z: 90}
-  m_RotationOffset: {x: 0.58678687, y: -6.6954546, z: -89.413414}
+  m_RotationOffset: {x: -4.7660923, y: 3.5831096, z: -138.83997}
   m_AffectRotationX: 1
   m_AffectRotationY: 1
   m_AffectRotationZ: 1
@@ -6291,7 +6291,7 @@ RotationConstraint:
   serializedVersion: 2
   m_Weight: 0.5
   m_RotationAtRest: {x: 89.1969, y: 88.96061, z: 179.99843}
-  m_RotationOffset: {x: 86.883675, y: 95.611565, z: -175.67964}
+  m_RotationOffset: {x: 32.933914, y: 91.84765, z: 176.24055}
   m_AffectRotationX: 1
   m_AffectRotationY: 1
   m_AffectRotationZ: 1
@@ -11133,6 +11133,7 @@ Transform:
   - {fileID: 5708923933107683600}
   - {fileID: 6421737240748015625}
   - {fileID: 486980975499473254}
+  - {fileID: 8459842496085334159}
   m_Father: {fileID: 1334547494133054564}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &6971930604430382820
@@ -11791,7 +11792,7 @@ RotationConstraint:
   serializedVersion: 2
   m_Weight: 0.5
   m_RotationAtRest: {x: -0.0011909178, y: 0.0015265887, z: -90.00001}
-  m_RotationOffset: {x: -14.988362, y: 13.354405, z: -154.27196}
+  m_RotationOffset: {x: -4.322761, y: -39.033764, z: 176.321}
   m_AffectRotationX: 1
   m_AffectRotationY: 1
   m_AffectRotationZ: 1
@@ -11894,7 +11895,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8555100516955251898}
-  - {fileID: 8459842496085334159}
   m_Father: {fileID: 7451154663974083542}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &8276197363058911367
@@ -12331,7 +12331,7 @@ RotationConstraint:
   serializedVersion: 2
   m_Weight: 0.5
   m_RotationAtRest: {x: 57.488132, y: -177.18802, z: -177.62918}
-  m_RotationOffset: {x: -50.58255, y: -9.69229, z: 7.783081}
+  m_RotationOffset: {x: -51.37797, y: -25.32798, z: 22.570974}
   m_AffectRotationX: 1
   m_AffectRotationY: 1
   m_AffectRotationZ: 1
@@ -12879,7 +12879,7 @@ RotationConstraint:
   serializedVersion: 2
   m_Weight: 0.5
   m_RotationAtRest: {x: 89.19592, y: -88.961586, z: -179.99939}
-  m_RotationOffset: {x: 84.75941, y: -100.354225, z: -178.45795}
+  m_RotationOffset: {x: -15.734813, y: -97.73427, z: -173.8685}
   m_AffectRotationX: 1
   m_AffectRotationY: 1
   m_AffectRotationZ: 1
