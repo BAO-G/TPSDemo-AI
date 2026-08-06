@@ -19,9 +19,8 @@ MonoBehaviour:
   reloadTime: 2
   maxRange: 200
   bulletSpread: 0.02
-  recoilAmount: 1.5
+  recoilAmount: 0.8
   adsSpreadMultiplier: 0.3
-  adsMoveSpeedMultiplier: 0.5
   reserveAmmoMax: 120
   ammoPickupAmount: 30
   weaponPrefab: {fileID: 1296539039355890, guid: 74e281f037063594ba9295673e09fecd,

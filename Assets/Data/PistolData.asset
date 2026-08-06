@@ -19,7 +19,7 @@ MonoBehaviour:
   reloadTime: 1.5
   maxRange: 100
   bulletSpread: 0.015
-  recoilAmount: 2
+  recoilAmount: 1.2
   adsSpreadMultiplier: 0.25
   reserveAmmoMax: 60
   ammoPickupAmount: 12
