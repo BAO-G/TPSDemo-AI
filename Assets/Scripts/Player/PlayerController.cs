@@ -46,6 +46,10 @@ public class PlayerController : MonoBehaviour
         if (_animator != null)
             _animator.applyRootMotion = false; // 移动由 CharacterController 接管
 
+        // 应用主菜单设置的鼠标灵敏度
+        GameSettings.ApplyAll();
+        mouseSensitivity = GameSettings.Sensitivity;
+
         _cameraTarget = transform.Find("CameraTarget");
 
         Cursor.lockState = CursorLockMode.Locked;

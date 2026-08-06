@@ -19,6 +19,9 @@ public class CrosshairController : MonoBehaviour
     public float maxDistance = 200f;
     public LayerMask raycastLayers = ~0; // 默认所有层
 
+    /// <summary>准星当前是否指向敌人（供自动射击等系统使用）</summary>
+    public bool IsOnEnemy { get; private set; }
+
     private void Update()
     {
         if (crosshairImage == null) return;
@@ -26,14 +29,14 @@ public class CrosshairController : MonoBehaviour
 
         // 屏幕中心射线
         Ray ray = Camera.main.ScreenPointToRay(new Vector3(Screen.width / 2f, Screen.height / 2f, 0f));
-        bool onEnemy = false;
+        IsOnEnemy = false;
 
         if (Physics.Raycast(ray, out RaycastHit hit, maxDistance, raycastLayers))
         {
             if (hit.collider.GetComponentInParent<EnemyBase>() != null)
-                onEnemy = true;
+                IsOnEnemy = true;
         }
 
-        crosshairImage.color = onEnemy ? enemyColor : normalColor;
+        crosshairImage.color = IsOnEnemy ? enemyColor : normalColor;
     }
 }

@@ -58,6 +58,10 @@ public class WeaponManager : MonoBehaviour
         if (_inputHandler.IsShootPressed())
             _currentWeapon.Shoot();
 
+        // 自动射击：设置开启且准星指向敌人时自动开火
+        if (GameSettings.AutoShoot && IsCrosshairOnEnemy())
+            _currentWeapon.Shoot();
+
         if (_inputHandler.IsReloadPressed())
             _currentWeapon.Reload();
 
@@ -79,6 +83,13 @@ public class WeaponManager : MonoBehaviour
     }
 
     /// <summary>按槽位索引切枪：越界/空槽/重复切换均忽略</summary>
+    /// <summary>准星是否指向敌人（自动射击用，查找场景中的 CrosshairController）</summary>
+    private bool IsCrosshairOnEnemy()
+    {
+        var crosshair = FindAnyObjectByType<CrosshairController>();
+        return crosshair != null && crosshair.IsOnEnemy;
+    }
+
     public void TrySwitchWeapon(int index)
     {
         if (weapons == null || index < 0 || index >= weapons.Length || weapons[index] == null)

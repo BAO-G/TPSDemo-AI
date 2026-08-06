@@ -43,6 +43,12 @@ public class PlayerADSController : MonoBehaviour
         if (tpsCamera != null)
             _cinemachineCamera = tpsCamera.GetComponent<CinemachineCamera>();
 
+        // 应用主菜单设置的 FOV
+        GameSettings.ApplyAll();
+        defaultFOV = GameSettings.FOV;
+        if (_cinemachineCamera != null)
+            _cinemachineCamera.Lens.FieldOfView = defaultFOV;
+
         _animator = GetComponentInChildren<Animator>();
 
         // 缓存武器挂点默认位置
