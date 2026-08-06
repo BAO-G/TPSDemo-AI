@@ -67,15 +67,22 @@ public class PlayerController : MonoBehaviour
         _characterController.Move((_horizontalVelocity + new Vector3(0f, _verticalVelocity, 0f)) * Time.deltaTime);
     }
 
-    /// <summary>用本帧水平速度驱动动画 Blend Tree（Speed / ForwardSpeed / StrafeSpeed 参数）</summary>
+    /// <summary>用本帧水平速度驱动动画 Blend Tree（Speed / ForwardSpeed / StrafeSpeed / IsRun 参数）</summary>
     private void LateUpdate()
     {
         if (_animator == null) return;
         // 世界速度转角色本地速度，用于 2D Blend Tree 方向判断
         Vector3 localVelocity = transform.InverseTransformDirection(_horizontalVelocity);
         _animator.SetFloat("Speed", _horizontalVelocity.magnitude);
-        _animator.SetFloat("ForwardSpeed", localVelocity.z);
-        _animator.SetFloat("StrafeSpeed", localVelocity.x);
+        // 归一化到 -1~1（除以目标速度，匹配 BlendTree 节点 ±1.0 坐标）
+        float normSpeed = _targetSpeed > 0.01f ? _targetSpeed : walkSpeed;
+        _animator.SetFloat("ForwardSpeed", localVelocity.z / normSpeed);
+        _animator.SetFloat("StrafeSpeed", localVelocity.x / normSpeed);
+        // 冲刺切换 Running Locomotion 状态（TPS 设计：只有向前才进入 Running，后退/横移用 Walking）
+        bool wantRun = _inputHandler != null && _inputHandler.IsSprintHeld() && localVelocity.z > 0.3f;
+        if (_coverController != null && _coverController.IsCrouching)
+            wantRun = false;
+        _animator.SetBool("IsRun", wantRun);
         // 动画速度因子：实际速度 / 目标速度，让腿的步频与位移同步，消除起步/急停滑步
         // 仅在有移动输入时生效（_targetSpeedValid=true），无输入时保持 1（Idle 正常速度）
         if (_targetSpeedValid && _targetSpeed > 0.01f)
@@ -106,7 +113,9 @@ public class PlayerController : MonoBehaviour
         _targetSpeedValid = moveInput.magnitude > 0.1f;
         if (_targetSpeedValid)
         {
-            _targetSpeed = _inputHandler.IsSprintHeld() ? sprintSpeed : walkSpeed;
+            // TPS 设计：只有向前移动时才允许冲刺加速（后退/横移不加速）
+            bool isForward = moveInput.y > 0.3f;
+            _targetSpeed = (_inputHandler.IsSprintHeld() && isForward) ? sprintSpeed : walkSpeed;
 
             // ADS 减速
             if (_adsController != null)
