@@ -8,12 +8,13 @@ public class PlayerCoverController : MonoBehaviour
 {
     [Header("蹲伏参数")]
     public float crouchHeight = 1f;                  // 蹲伏时角色高度
-    public float crouchSpeedMultiplier = 0.5f;       // 蹲伏时移速倍率
+    public float crouchSpeedMultiplier = 0.35f;      // 蹲伏时移速倍率（蹲走≈1.05m/s，蹲跑≈2.1m/s）
     public float crouchTransitionSpeed = 15f;        // 高度过渡速度
 
     private CharacterController _characterController;
     private PlayerInputHandler _inputHandler;
     private PlayerController _playerController;
+    private Animator _animator; // 驱动 IsCrouch 动画参数
 
     private float _standHeight;
     private Vector3 _standCenter;
@@ -29,6 +30,7 @@ public class PlayerCoverController : MonoBehaviour
         _characterController = GetComponent<CharacterController>();
         _inputHandler = GetComponent<PlayerInputHandler>();
         _playerController = GetComponent<PlayerController>();
+        _animator = GetComponentInChildren<Animator>();
 
         if (_characterController != null)
         {
@@ -45,7 +47,10 @@ public class PlayerCoverController : MonoBehaviour
         if (_playerController.CurrentHealth <= 0f) return;
         if (_characterController == null) return;
 
-        _isCrouching = _inputHandler.IsCrouchHeld();
+        // 切换式蹲伏：按一下蹲下，再按一下站起（不要求一直按住）
+        if (_inputHandler.IsCrouchPressed())
+            _isCrouching = !_isCrouching;
+
         _targetHeight = _isCrouching ? crouchHeight : _standHeight;
 
         // 平滑过渡高度和中心
@@ -54,5 +59,9 @@ public class PlayerCoverController : MonoBehaviour
 
         Vector3 targetCenter = _isCrouching ? _crouchCenter : _standCenter;
         _characterController.center = Vector3.Lerp(_characterController.center, targetCenter, crouchTransitionSpeed * Time.deltaTime);
+
+        // 驱动蹲伏动画状态（Crouch 状态，IsCrouch 参数）
+        if (_animator != null)
+            _animator.SetBool("IsCrouch", _isCrouching);
     }
 }

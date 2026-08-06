@@ -8,7 +8,7 @@ using Unity.Cinemachine;
 public class PlayerADSController : MonoBehaviour
 {
     [Header("ADS 参数")]
-    public float defaultFOV = 60f;
+    public float defaultFOV = 55f;
     public float adsFOV = 40f;
     public float adsTransitionSpeed = 10f;
     public float adsMoveSpeedMultiplier = 0.5f;     // ADS时移速倍率
@@ -25,6 +25,7 @@ public class PlayerADSController : MonoBehaviour
     private Quaternion _defaultWeaponRotation;
 
     private float _adsProgress;                      // 0=腰射, 1=完全ADS
+    private Animator _animator;                       // 角色 Animator（驱动 IsAiming 参数）
 
     /// <summary>是否处于 ADS 状态（进度过半）</summary>
     public bool IsADS => _adsProgress > 0.5f;
@@ -41,6 +42,8 @@ public class PlayerADSController : MonoBehaviour
         var tpsCamera = GameObject.Find("TPSCamera");
         if (tpsCamera != null)
             _cinemachineCamera = tpsCamera.GetComponent<CinemachineCamera>();
+
+        _animator = GetComponentInChildren<Animator>();
 
         // 缓存武器挂点默认位置
         var weaponHolderObj = transform.Find("WeaponHolder");
@@ -75,5 +78,9 @@ public class PlayerADSController : MonoBehaviour
             _weaponHolder.localPosition = Vector3.Lerp(_defaultWeaponPosition, adsTarget, _adsProgress);
             _weaponHolder.localRotation = Quaternion.Slerp(_defaultWeaponRotation, adsRotTarget, _adsProgress);
         }
+
+        // 驱动瞄准动画状态（Aiming 层，IsAiming 参数）
+        if (_animator != null)
+            _animator.SetBool("IsAiming", _adsProgress > 0.5f);
     }
 }

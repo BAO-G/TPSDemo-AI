@@ -46,7 +46,11 @@ public class PlayerHealth : MonoBehaviour
         _animator?.SetTrigger("Hit");
 
         if (_currentHealth <= 0f)
+        {
+            // 触发死亡动画（Base Layer 的 Die 状态，AnyState 转移）
+            _animator?.SetTrigger("Died");
             OnDeath?.Invoke();
+        }
     }
 
     /// <summary>尝试使用医疗包治疗，返回是否成功</summary>

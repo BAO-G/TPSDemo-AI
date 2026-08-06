@@ -1,6 +1,10 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 /// <summary>
 /// 封装 InputAction，为其他脚本提供统一的输入数据接口
 /// </summary>
@@ -54,7 +58,46 @@ public class PlayerInputHandler : MonoBehaviour
     /// <summary>鼠标/右摇杆视角增量</summary>
     public Vector2 GetLookDelta()
     {
+        // 窗口失去焦点（鼠标移出游戏窗口/被按 Esc 释放）时忽略视角旋转
+        if (!Application.isFocused) return Vector2.zero;
+        // Editor 中额外检测：鼠标不在 Game 视图内时不转视角
+        // （Application.isFocused 在 Editor 里恒为 true，鼠标移到 Hierarchy/Console/Inspector 时仍会驱动视角）
+        if (!IsMouseInGameView()) return Vector2.zero;
         return _lookAction != null ? _lookAction.ReadValue<Vector2>() : Vector2.zero;
+    }
+
+    /// <summary>Editor 中判断鼠标是否位于 Game 视图窗口内（构建版恒为 true）</summary>
+    private bool IsMouseInGameView()
+    {
+#if UNITY_EDITOR
+        if (!Application.isPlaying) return true;
+        try
+        {
+            // 查找 GameView 编辑器窗口
+            EditorWindow gameView = null;
+            foreach (var w in Resources.FindObjectsOfTypeAll<EditorWindow>())
+            {
+                if (w.GetType().Name == "GameView") { gameView = w; break; }
+            }
+            if (gameView == null) return true;
+
+            // GameView 屏幕矩形（GUI 坐标，左上原点逻辑点）→ 屏幕物理像素矩形（左下原点）
+            Rect guiRect = gameView.position;
+            Vector2 screenMin = GUIUtility.GUIToScreenPoint(new Vector2(guiRect.x, guiRect.y));
+            Vector2 screenMax = GUIUtility.GUIToScreenPoint(new Vector2(guiRect.x + guiRect.width, guiRect.y + guiRect.height));
+            Rect screenRect = new Rect(screenMin.x, screenMin.y, screenMax.x - screenMin.x, screenMax.y - screenMin.y);
+
+            // Input.mousePosition 与 screenRect 同为屏幕物理像素坐标（左下原点），可直接比较
+            Vector3 mouseScreen = Input.mousePosition;
+            return screenRect.Contains(new Vector2(mouseScreen.x, mouseScreen.y));
+        }
+        catch
+        {
+            return true; // 异常时保守放行，避免卡视角
+        }
+#else
+        return true;
+#endif
     }
 
     /// <summary>射击键是否按下</summary>
@@ -85,6 +128,12 @@ public class PlayerInputHandler : MonoBehaviour
     public bool IsCrouchHeld()
     {
         return _crouchAction != null && _crouchAction.IsPressed();
+    }
+
+    /// <summary>蹲伏键是否本帧按下（用于切换式蹲伏）</summary>
+    public bool IsCrouchPressed()
+    {
+        return _crouchAction != null && _crouchAction.WasPressedThisFrame();
     }
 
     /// <summary>治疗键是否本帧按下</summary>

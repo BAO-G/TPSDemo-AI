@@ -15,6 +15,7 @@ public class WeaponManager : MonoBehaviour
     private FirearmWeapon _currentWeapon;
     private PlayerInputHandler _inputHandler;
     private int _currentWeaponIndex;   // 当前武器槽位索引
+    private Animator _animator;        // 驱动 ChangeWeapon 切枪动画
 
     // 弹药变化事件（弹匣当前/弹匣最大），供 HUD 监听
     public event Action<int, int> OnAmmoChanged;
@@ -30,6 +31,7 @@ public class WeaponManager : MonoBehaviour
         if (weaponHolder == null)
             weaponHolder = transform.Find("WeaponHolder");
         _inputHandler = GetComponent<PlayerInputHandler>();
+        _animator = GetComponentInChildren<Animator>();
 
         if (weaponHolder != null)
         {
@@ -86,6 +88,8 @@ public class WeaponManager : MonoBehaviour
 
         _currentWeaponIndex = index;
         EquipWeapon(weapons[index]);
+        // 触发切枪动画（ChangeWeapon 层）
+        _animator?.SetTrigger("ChangeWeapon");
     }
 
     public void EquipWeapon(GameObject weaponPrefab)

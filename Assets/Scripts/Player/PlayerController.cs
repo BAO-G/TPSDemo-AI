@@ -11,6 +11,10 @@ public class PlayerController : MonoBehaviour
     public float sprintSpeed = 6f;
     public float jumpHeight = 1.0f;
     public float gravity = -9.81f;
+    public float acceleration = 14f;      // 水平加速度（m/s²）：起步平滑，值越大起步越快
+    public float deceleration = 18f;      // 水平减速度（m/s²）：急停平滑，值越大刹车越快
+    public float animSpeedMin = 0.5f;     // 动画速度因子下限（加速中动画放慢的最低倍率）
+    public float animSpeedMax = 1.3f;     // 动画速度因子上限（超速时动画加快的最高倍率）
 
     [Header("视角参数")]
     public float mouseSensitivity = 2f;
@@ -72,9 +76,23 @@ public class PlayerController : MonoBehaviour
         _animator.SetFloat("Speed", _horizontalVelocity.magnitude);
         _animator.SetFloat("ForwardSpeed", localVelocity.z);
         _animator.SetFloat("StrafeSpeed", localVelocity.x);
+        // 动画速度因子：实际速度 / 目标速度，让腿的步频与位移同步，消除起步/急停滑步
+        // 仅在有移动输入时生效（_targetSpeedValid=true），无输入时保持 1（Idle 正常速度）
+        if (_targetSpeedValid && _targetSpeed > 0.01f)
+        {
+            float factor = Mathf.Clamp(_horizontalVelocity.magnitude / _targetSpeed, animSpeedMin, animSpeedMax);
+            _animator.SetFloat("AnimSpeed", factor);
+        }
+        else
+        {
+            _animator.SetFloat("AnimSpeed", 1f);
+        }
         // 通知动画状态机是否在地面，用于跳跃落地后退出 Jump 状态
         _animator.SetBool("Grounded", _characterController.isGrounded);
     }
+
+    private float _targetSpeed;          // 本帧目标速度（供动画速度因子计算）
+    private bool _targetSpeedValid;      // 是否有有效移动输入
 
     private void HandleMovement()
     {
@@ -84,21 +102,30 @@ public class PlayerController : MonoBehaviour
         Vector2 moveInput = _inputHandler.GetMoveInput();
         Vector3 moveDirection = transform.TransformDirection(new Vector3(moveInput.x, 0f, moveInput.y));
 
-        // 基础速度
-        float currentSpeed = _inputHandler.IsSprintHeld() ? sprintSpeed : walkSpeed;
+        // 仅在有移动输入时更新目标速度，否则保持 Idle 正常速度
+        _targetSpeedValid = moveInput.magnitude > 0.1f;
+        if (_targetSpeedValid)
+        {
+            _targetSpeed = _inputHandler.IsSprintHeld() ? sprintSpeed : walkSpeed;
 
-        // ADS 减速
-        if (_adsController != null)
-            currentSpeed *= 1f - _adsController.ADSProgress * (1f - _adsController.adsMoveSpeedMultiplier);
+            // ADS 减速
+            if (_adsController != null)
+                _targetSpeed *= 1f - _adsController.ADSProgress * (1f - _adsController.adsMoveSpeedMultiplier);
 
-        // 掩体/蹲伏减速
-        if (_coverController != null && _coverController.IsCrouching)
-            currentSpeed *= _coverController.crouchSpeedMultiplier;
+            // 掩体/蹲伏减速
+            if (_coverController != null && _coverController.IsCrouching)
+                _targetSpeed *= _coverController.crouchSpeedMultiplier;
+        }
 
-        // 记录本帧水平速度（无输入时归零），实际位移由 ApplyCombinedMove 统一执行
-        _horizontalVelocity = moveInput.magnitude > 0.1f
-            ? moveDirection.normalized * currentSpeed
+        // 目标速度向量（无输入时归零）
+        Vector3 targetVelocity = moveInput.magnitude > 0.1f
+            ? moveDirection.normalized * _targetSpeed
             : Vector3.zero;
+
+        // 速度平滑：用加速度/减速度向目标速度逼近，避免瞬间启停造成滑步
+        float maxDelta = (targetVelocity.sqrMagnitude >= _horizontalVelocity.sqrMagnitude
+            ? acceleration : deceleration) * Time.deltaTime;
+        _horizontalVelocity = Vector3.MoveTowards(_horizontalVelocity, targetVelocity, maxDelta);
     }
 
     private void HandleGravity()
