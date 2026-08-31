@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using DG.Tweening;
 
 /// <summary>
 /// 暂停菜单：Tab 键切换暂停/继续
@@ -40,7 +41,11 @@ public class PauseMenuController : MonoBehaviour
     private void Update()
     {
         // Tab 键切换（设置面板内按 Tab 返回暂停菜单）
-        if (Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame)
+        var input = FindAnyObjectByType<PlayerInputHandler>();
+        bool pausePressed = input != null ? input.IsPausePressed()
+            : (Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame);
+
+        if (pausePressed)
         {
             if (_inSettings)
                 CloseSettings();
@@ -104,11 +109,12 @@ public class PauseMenuController : MonoBehaviour
         _isPaused = true;
         Time.timeScale = 0f;
 
-        // 暂停菜单显示
+        // 暂停菜单显示（alpha 恢复为可见，使用不受 timeScale 影响的动画）
         pausePanel.gameObject.SetActive(true);
         pausePanel.alpha = 0f;
         pausePanel.interactable = true;
         pausePanel.blocksRaycasts = true;
+        pausePanel.DOFade(1f, 0.2f).SetUpdate(true);
 
         // 加载当前设置值
         LoadSettings();
@@ -150,6 +156,7 @@ public class PauseMenuController : MonoBehaviour
         settingsPanel.alpha = 0f;
         settingsPanel.interactable = true;
         settingsPanel.blocksRaycasts = true;
+        settingsPanel.DOFade(1f, 0.2f).SetUpdate(true);
         LoadSettings();
     }
 
@@ -158,8 +165,10 @@ public class PauseMenuController : MonoBehaviour
         _inSettings = false;
         settingsPanel.gameObject.SetActive(false);
         pausePanel.gameObject.SetActive(true);
+        pausePanel.alpha = 0f;
         pausePanel.interactable = true;
         pausePanel.blocksRaycasts = true;
+        pausePanel.DOFade(1f, 0.2f).SetUpdate(true);
     }
 
     /// <summary>读取 PlayerPrefs 到设置控件</summary>

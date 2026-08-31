@@ -1,6 +1,6 @@
 ﻿# TPS 战术射击游戏 — 开发日志
 
-> 最后更新：2026-08-07 | 当前阶段：阶段 3.6 移动/武器/准星完善完成 → 待进入阶段 4（打磨）
+> 最后更新：2026-08-31 | 当前阶段：阶段 4（打磨）进行中 — 主菜单/关卡替换/暂停菜单已完成，剩余：音效/粒子特效/敌人死亡动画/手雷/性能优化
 
 ---
 
@@ -672,5 +672,28 @@ Player/P08.../skeleton/.../hand_R（武器挂右手，用户手动改，Humanoid
 
 ---
 
+## 阶段 4 记录（2026-08-07 提交 + 2026-08-31 验证补交）
+
+> 编译：0 错误 0 警告 | Play 模式验证：暂停/恢复/设置面板全部通过（2026-08-31）
+
+### 已完成（3 次提交 + 本次补交）
+
+| 提交 | 内容 |
+|------|------|
+| `958332e` | 阶段4-UI：主菜单场景（标题/开始/设置/退出 + Loading 读条 + DOTween 动画）、设置持久化（灵敏度/音量/FOV/自动射击）、程序化 UI 纹理、BuildSettings 接入 |
+| `9cc0626` | 场景替换方案A（DemoScene 800m 关卡接入 SampleScene + NavMesh 300×300 烘焙）、后处理增强（ColorAdjustments 军事色调/Bloom/Vignette）、游戏设置接入 |
+| `247f7b7` | 暂停菜单（Tab 键暂停/继续 + 设置面板 + 返回主菜单）、后坐力调小（步枪 1.5→0.8 / 冲锋枪 1→0.6 / 手枪 2→1.2）、设置滑块范围优化（FOV 55~100 / 灵敏度 1~10） |
+| 本次（2026-08-31） | 暂停菜单体验优化：① 暂停检测从 `Keyboard.current` 轮询迁移到 Input System（新增 Pause 动作绑定 Tab + `IsPausePressed()`，与 Crouch/Heal 同模式）；② 暂停/设置面板 DOTween 淡入 `SetUpdate(true)`（timeScale=0 时动画不冻结）；③ CloseSettings 返回时暂停面板 alpha 归零重新淡入 |
+
+### 验证结果（2026-08-31 Play 模式实测）
+
+- 编译 0 错误；`_pauseAction` 运行时 enabled、1 个 Tab 绑定
+- Pause()：timeScale=0、面板 0.2s 淡入至 alpha=1.00（timeScale=0 下正常播放）、鼠标解锁、disableOnPause 5/5 脚本禁用
+- Resume()：timeScale=1 恢复
+- OpenSettings/CloseSettings：面板切换正常，返回时暂停面板重新淡入
+- 编辑器内模拟 Tab 按键不可靠（已知坑 28），输入链路以"绑定存在 + 与 Crouch/Heal 同模式"佐证
+
+---
+
 ## 下一阶段
-阶段 4：打磨 — 音效（射击/换弹/受伤/脚步）、命中粒子特效、敌人死亡动画、手雷功能（toss grenade）、掩体切角（turn 动画挂载点）、UI 美化、性能优化
+阶段 4 剩余：音效（射击/换弹/受伤/脚步 generate_audio）、命中粒子特效、敌人死亡动画、手雷功能（toss grenade）、掩体切角（turn 动画挂载点）、UI 美化、性能优化（URP 质量档/Draw Call）

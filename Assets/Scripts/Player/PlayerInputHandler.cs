@@ -19,6 +19,7 @@ public class PlayerInputHandler : MonoBehaviour
     private InputAction _aimAction;
     private InputAction _crouchAction;
     private InputAction _healAction;
+    private InputAction _pauseAction;
     private InputAction _switchWeapon1Action;
     private InputAction _switchWeapon2Action;
     private InputAction _switchWeapon3Action;
@@ -41,6 +42,7 @@ public class PlayerInputHandler : MonoBehaviour
         _aimAction = _playerInput.actions.FindAction("Aim");
         _crouchAction = _playerInput.actions.FindAction("Crouch");
         _healAction = _playerInput.actions.FindAction("Heal");
+        _pauseAction = _playerInput.actions.FindAction("Pause");
         _switchWeapon1Action = _playerInput.actions.FindAction("SwitchWeapon1");
         _switchWeapon2Action = _playerInput.actions.FindAction("SwitchWeapon2");
         _switchWeapon3Action = _playerInput.actions.FindAction("SwitchWeapon3");
@@ -140,6 +142,12 @@ public class PlayerInputHandler : MonoBehaviour
     public bool IsHealPressed()
     {
         return _healAction != null && _healAction.WasPressedThisFrame();
+    }
+
+    /// <summary>暂停键是否本帧按下（Tab）</summary>
+    public bool IsPausePressed()
+    {
+        return _pauseAction != null && _pauseAction.WasPressedThisFrame();
     }
 
     /// <summary>切枪键是否本帧按下，返回武器槽位索引（0/1/2），无按下返回 -1</summary>

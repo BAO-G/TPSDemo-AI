@@ -78,6 +78,15 @@
                                          "initialStateCheck":  false
                                      },
                                      {
+                                         "name":  "Pause",
+                                         "type":  "Button",
+                                         "id":  "d1e2f3a4-b5c6-7890-defa-1234567890ab",
+                                         "expectedControlType":  "Button",
+                                         "processors":  "",
+                                         "interactions":  "",
+                                         "initialStateCheck":  false
+                                     },
+                                     {
                                          "name":  "SwitchWeapon1",
                                          "type":  "Button",
                                          "id":  "e5f6a7b8-c9d0-1234-efab-345678901234",
@@ -257,6 +266,17 @@
                                           "processors":  "",
                                           "groups":  "",
                                           "action":  "Heal",
+                                          "isComposite":  false,
+                                          "isPartOfComposite":  false
+                                      },
+                                      {
+                                          "name":  "",
+                                          "id":  "e1f2a3b4-c5d6-8901-efab-2345678901cd",
+                                          "path":  "\u003cKeyboard\u003e/tab",
+                                          "interactions":  "",
+                                          "processors":  "",
+                                          "groups":  "",
+                                          "action":  "Pause",
                                           "isComposite":  false,
                                           "isPartOfComposite":  false
                                       },
