@@ -746,4 +746,7 @@ Player/P08.../skeleton/.../hand_R（武器挂右手，用户手动改，Humanoid
 ---
 
 ## 下一阶段
-阶段 4 剩余：音效（射击/换弹/受伤/脚步 generate_audio）、命中粒子特效、敌人死亡动画、手雷功能（toss grenade）、掩体切角（turn 动画挂载点）、UI 美化、性能优化（URP 质量档/Draw Call）
+
+> **规划基准已迁移至 [DEVELOPMENT_PLAN.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVELOPMENT_PLAN.md)（2026-09-06 创建）**——后续开发以该文档为准，包含完整差距分析、已确认决策（D1 Raycast弹道 / D2 轻量静态事件 / D3 波次生存模式 / D4 任务包顺序）、接口定义、进度计划与测试策略。
+
+执行顺序：**4A 基础设施**（GameEvents/AudioManager/ObjectPool + 缺陷F1~F4修复）→ **4B 音效**（generate_audio）→ **4C 敌人升级**（死亡动画/Raycast弹道+曳光/部位伤害）→ **4D 命中反馈**（粒子/HitMarker/弹痕）→ **4E 手雷** → **4F 武器手感**（Sway/HeadBob）→ **阶段5 流程闭环**（GameManager/波次生成/结算界面）→ **阶段6 AI深度**（三重感知/Search/侧移/血条/UI美化/性能）
