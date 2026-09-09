@@ -13,6 +13,9 @@ public class PlayerADSController : MonoBehaviour
     public float adsTransitionSpeed = 10f;
     public float adsMoveSpeedMultiplier = 0.5f;     // ADS时移速倍率
 
+    [Header("相机引用（场景中拖入 TPSCamera，F4：替代字符串查找）")]
+    [SerializeField] private CinemachineCamera tpsCamera;
+
     [Header("武器贴枪偏移（相对挂点默认位置的偏移量）")]
     public Vector3 adsPositionOffset = new Vector3(-0.12f, 0.45f, 0.15f); // 抬至眼线并对齐屏幕中线
     public Vector3 adsRotationOffset = Vector3.zero;
@@ -38,10 +41,16 @@ public class PlayerADSController : MonoBehaviour
         _inputHandler = GetComponent<PlayerInputHandler>();
         _playerController = GetComponent<PlayerController>();
 
-        // 查找 Cinemachine 相机
-        var tpsCamera = GameObject.Find("TPSCamera");
-        if (tpsCamera != null)
-            _cinemachineCamera = tpsCamera.GetComponent<CinemachineCamera>();
+        // 使用序列化引用（F4）；未赋值时兜底按名称查找一次并警告
+        if (tpsCamera == null)
+        {
+            var found = GameObject.Find("TPSCamera");
+            if (found != null)
+                tpsCamera = found.GetComponent<CinemachineCamera>();
+            if (tpsCamera == null)
+                Debug.LogWarning("PlayerADSController 未拖入 TPSCamera 引用，ADS 的 FOV 过渡不生效", this);
+        }
+        _cinemachineCamera = tpsCamera;
 
         // 应用主菜单设置的 FOV
         GameSettings.ApplyAll();

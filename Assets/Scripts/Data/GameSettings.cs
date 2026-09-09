@@ -39,4 +39,11 @@ public static class GameSettings
         Load();
         AudioListener.volume = MasterVolume;
     }
+
+    /// <summary>写入自动射击开关（暂停菜单/主菜单共用：同步 PlayerPrefs 与运行时缓存）</summary>
+    public static void SetAutoShoot(bool value)
+    {
+        AutoShoot = value;
+        PlayerPrefs.SetInt(KeyAutoShoot, value ? 1 : 0);
+    }
 }

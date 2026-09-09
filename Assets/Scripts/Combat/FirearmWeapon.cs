@@ -20,6 +20,10 @@ public class FirearmWeapon : MonoBehaviour
     private PlayerADSController _adsController;
     private Animator _playerAnimator; // 玩家角色动画（阶段3接入，驱动射击/换弹动作）
 
+    // 切枪弹药恢复（F1 修复）：WeaponManager 在实例化后、Start 前写入；-1 表示无缓存用默认满弹
+    [HideInInspector] public int pendingMagazine = -1;
+    [HideInInspector] public int pendingReserve = -1;
+
     private void Start()
     {
         _playerController = FindAnyObjectByType<PlayerController>();
@@ -36,6 +40,14 @@ public class FirearmWeapon : MonoBehaviour
 
         _currentAmmo = weaponData.magazineSize;
         _reserveAmmo = weaponData.reserveAmmoMax;
+
+        // 消费切枪前的弹药缓存（F1：切枪不再刷满弹）
+        if (pendingMagazine >= 0)
+            _currentAmmo = Mathf.Min(pendingMagazine, weaponData.magazineSize);
+        if (pendingReserve >= 0)
+            _reserveAmmo = Mathf.Min(pendingReserve, weaponData.reserveAmmoMax);
+        pendingMagazine = -1;
+        pendingReserve = -1;
 
         if (weaponData.weaponPrefab != null && GetComponentInChildren<MeshRenderer>() == null)
         {
@@ -68,22 +80,46 @@ public class FirearmWeapon : MonoBehaviour
 
         if (Physics.Raycast(origin.position, direction, out RaycastHit hit, weaponData.maxRange))
         {
-            var enemy = hit.collider.GetComponentInParent<EnemyBase>();
-            if (enemy != null) enemy.TakeDamage(weaponData.damage);
-
-            var player = hit.collider.GetComponentInParent<PlayerHealth>();
-            if (player != null) player.TakeDamage(weaponData.damage);
+            ApplyHit(hit);
         }
 
         _currentAmmo--;
         _nextFireTime = Time.time + (60f / weaponData.fireRate);
         PlayMuzzleFlash();
 
+        // 广播开枪事件（枪口位置 + 武器资产名，音效/噪音/曳光订阅）
+        Transform muzzle = firePoint != null ? firePoint : origin;
+        GameEvents.RaisePlayerShot(muzzle.position, weaponData.name);
+
         if (_playerAnimator != null)
             _playerAnimator.SetTrigger("Fire");
 
         if (_playerController != null)
             _playerController.ApplyRecoil(weaponData.recoilAmount);
+    }
+
+    /// <summary>命中处理（4C）：区分头/身体部位伤害；命中敌人广播 HitMarker，爆头击杀广播 HEADSHOT</summary>
+    private void ApplyHit(RaycastHit hit)
+    {
+        var part = hit.collider.GetComponentInParent<EnemyPart>();
+        var enemy = part != null ? part.Owner : hit.collider.GetComponentInParent<EnemyBase>();
+        if (enemy != null)
+        {
+            bool headshot = part != null && part.isHead;
+            float damage = headshot ? weaponData.damage * enemy.headshotMultiplier : weaponData.damage;
+            bool killed = enemy.TakeDamage(damage);
+
+            GameEvents.RaiseHitConfirmed();
+            GameEvents.RaiseSurfaceHit(hit.point, hit.normal, true);   // 血特效
+            if (killed && headshot)
+                GameEvents.RaiseHeadshotKilled();
+            return;
+        }
+
+        GameEvents.RaiseSurfaceHit(hit.point, hit.normal, false);      // 命中烟尘+弹痕
+        var player = hit.collider.GetComponentInParent<PlayerHealth>();
+        if (player != null)
+            player.TakeDamage(weaponData.damage);
     }
 
     /// <summary>换弹：从备弹池补充弹匣</summary>
@@ -101,6 +137,7 @@ public class FirearmWeapon : MonoBehaviour
         _isReloading = true;
         if (_playerAnimator != null)
             _playerAnimator.SetTrigger("Reload");
+        GameEvents.RaiseReloadStart();
         yield return new WaitForSeconds(weaponData.reloadTime);
 
         int needed = weaponData.magazineSize - _currentAmmo;
@@ -109,6 +146,7 @@ public class FirearmWeapon : MonoBehaviour
         _reserveAmmo -= toReload;
 
         _isReloading = false;
+        GameEvents.RaiseReloadEnd();
     }
 
     public bool CanShoot()

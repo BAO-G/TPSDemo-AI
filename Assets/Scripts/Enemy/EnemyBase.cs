@@ -21,6 +21,13 @@ public class EnemyBase : MonoBehaviour
     public float patrolSpeed = 3f;       // 巡逻速度
     public float chaseSpeed = 6f;        // 追击速度
 
+    [Header("远程攻击(4C新增)")]
+    [Range(0f, 1f)] public float accuracy = 0.7f;  // 命中率（越低散布角越大）
+    public float corpseDuration = 10f;             // 尸体保留时长（秒）
+
+    [Header("部位(4C新增)")]
+    public float headshotMultiplier = 2f;          // 爆头伤害倍率（FirearmWeapon 读取）
+
     private float _currentHealth;
     private NavMeshAgent _navAgent;
     private Transform _playerTransform;
@@ -28,7 +35,6 @@ public class EnemyBase : MonoBehaviour
     private int _currentPatrolIndex;
     private float _lastAttackTime;
     private bool _isDead;
-    private float _lastLogTime; // 状态日志节流计时（每 0.5 秒输出一次）
     private Animator _animator; // 动画驱动器（可为空，阶段3接入）
 
     private void Start()
@@ -47,6 +53,30 @@ public class EnemyBase : MonoBehaviour
             _playerTransform = player.transform;
             _playerHealth = player.GetComponent<PlayerHealth>();
         }
+
+        SetupHeadPart();
+    }
+
+    /// <summary>头部部位碰撞体（4C 部位伤害）：人形 Avatar 时在 Head 骨骼挂球形碰撞体 + EnemyPart 标记
+    /// 同时收缩根部胶囊体到躯干腿部（0~1.5m）——默认 2m 胶囊把头部包在内部，射线先命中胶囊导致爆头判定永远失效（4D 热修复）</summary>
+    private void SetupHeadPart()
+    {
+        var bodyCap = GetComponent<CapsuleCollider>();
+        if (bodyCap != null)
+        {
+            bodyCap.height = 1.5f;
+            bodyCap.center = new Vector3(0f, 0.75f, 0f);
+        }
+
+        if (_animator == null || _animator.avatar == null || !_animator.avatar.isHuman)
+            return;
+        var head = _animator.GetBoneTransform(HumanBodyBones.Head);
+        if (head == null || head.GetComponent<EnemyPart>() != null)
+            return;
+        var col = head.gameObject.AddComponent<SphereCollider>();
+        col.radius = 0.18f;
+        var part = head.gameObject.AddComponent<EnemyPart>();
+        part.isHead = true;
     }
 
     private void Update()
@@ -54,14 +84,6 @@ public class EnemyBase : MonoBehaviour
         if (_isDead)
         {
             return;
-        }
-
-        // 状态日志每 0.5 秒输出一次，避免刷屏；攻击/追击日志仍每次输出
-        if (Time.time - _lastLogTime >= 0.5f)
-        {
-            _lastLogTime = Time.time;
-            float dist = _playerTransform != null ? Vector3.Distance(transform.position, _playerTransform.position) : -1f;
-            Debug.Log($"[{gameObject.name}] 距离玩家={dist:F1}m | 状态={GetCurrentState(dist)} | 血量={_currentHealth}");
         }
 
         // 未找到玩家（未设置 Tag）时保持巡逻
@@ -95,24 +117,6 @@ public class EnemyBase : MonoBehaviour
             // NavMeshAgent 始终贴地，直接置为 true 让 Jump 状态正常退出
             _animator.SetBool("Grounded", true);
         }
-    }
-
-    /// <summary>根据与玩家距离返回当前行为状态字符串，用于日志</summary>
-    private string GetCurrentState(float dist)
-    {
-        if (_playerTransform == null || dist < 0f)
-        {
-            return "无目标";
-        }
-        if (dist <= attackRange)
-        {
-            return "攻击";
-        }
-        if (dist <= detectRange)
-        {
-            return "追击";
-        }
-        return "巡逻";
     }
 
     /// <summary>循环遍历巡逻路点；无路点或没有 NavMeshAgent 时原地待命</summary>
@@ -164,12 +168,9 @@ public class EnemyBase : MonoBehaviour
         _navAgent.isStopped = false;
         _navAgent.speed = chaseSpeed;
         _navAgent.SetDestination(_playerTransform.position);
-
-        float dist = Vector3.Distance(transform.position, _playerTransform.position);
-        Debug.Log($"[{gameObject.name}] 追击玩家！距离={dist:F1}m");
     }
 
-    /// <summary>攻击玩家：攻击时停下，冷却结束后对玩家造成伤害</summary>
+    /// <summary>攻击玩家：停下 → 冷却结束后从胸口向玩家胸口 Raycast（决策 D1），命中才扣血（掩体天然挡弹）</summary>
     private void AttackPlayer()
     {
         if (_navAgent != null)
@@ -184,7 +185,7 @@ public class EnemyBase : MonoBehaviour
             return;
         }
 
-        // 玩家已死亡时停止攻击（血量归零后敌人不再输出攻击日志）
+        // 玩家已死亡时停止攻击（血量归零后敌人不再输出）
         if (_playerHealth == null || _playerHealth.CurrentHealth <= 0f)
         {
             return;
@@ -192,38 +193,69 @@ public class EnemyBase : MonoBehaviour
 
         _lastAttackTime = Time.time;
 
-        // 播放射击动画（阶段3接入）
+        // 播放射击动画
         if (_animator != null)
         {
             _animator.SetTrigger("Fire");
         }
 
-        // 上面已确认 _playerHealth 非空且存活，直接造成伤害
-        _playerHealth.TakeDamage(attackDamage);
-        Debug.Log($"[{gameObject.name}] 攻击！造成 {attackDamage} 伤害 | 玩家剩余血量={_playerHealth.GetHealthPercent() * 100:F0}%");
+        // 广播敌人开枪事件（音效/受击方向订阅）
+        GameEvents.RaiseEnemyShot(transform.position);
+
+        // Raycast 即时弹道：胸口 → 玩家胸口，accuracy 越低弹道偏转越大
+        Vector3 origin = transform.position + Vector3.up * 1.5f;
+        Vector3 target = _playerTransform.position + Vector3.up * 1.2f;
+        Vector3 dir = (target - origin).normalized;
+        float spreadDeg = (1f - Mathf.Clamp01(accuracy)) * 15f;
+        dir = Quaternion.Euler(
+            Random.Range(-spreadDeg, spreadDeg),
+            Random.Range(-spreadDeg, spreadDeg),
+            0f) * dir;
+
+        float range = attackRange + 3f;
+        if (Physics.Raycast(origin, dir, out RaycastHit hit, range))
+        {
+            // 命中：曳光到命中点，命中玩家才扣血（打墙/掩体无效）
+            GameEvents.RaiseBulletTrail(origin, hit.point);
+            var hitPlayer = hit.collider.GetComponentInParent<PlayerHealth>();
+            if (hitPlayer != null)
+                hitPlayer.TakeDamage(attackDamage);
+        }
+        else
+        {
+            // 未命中任何物体：曳光打到射程尽头
+            GameEvents.RaiseBulletTrail(origin, origin + dir * range);
+        }
     }
 
-    /// <summary>受击扣血，血量归零触发死亡</summary>
-    public void TakeDamage(float amount)
+    /// <summary>受击扣血，血量归零触发死亡；返回是否被击杀（供爆头判定）</summary>
+    public bool TakeDamage(float amount)
     {
         if (_isDead)
         {
-            return;
+            return false;
         }
 
         _currentHealth -= amount;
-        Debug.Log($"<color=red>💥 {gameObject.name} 受到 {amount} 伤害！剩余血量 {_currentHealth}</color>");
+
+        // 广播敌人受击事件（音效订阅）
+        GameEvents.RaiseEnemyDamaged(transform.position);
 
         // 受击时播放 hit reaction 动画（UpperBody 层 HitReaction 状态）
         _animator?.SetTrigger("Hit");
+#if UNITY_EDITOR
+        Debug.Log($"<color=red>💥 {gameObject.name} 受到 {amount} 伤害！剩余血量 {_currentHealth}</color>");
+#endif
 
         if (_currentHealth <= 0f)
         {
             Die();
+            return true;
         }
+        return false;
     }
 
-    /// <summary>死亡：记录日志并延迟销毁</summary>
+    /// <summary>死亡：播放死亡动画，禁用导航/碰撞，尸体保留 corpseDuration 后销毁</summary>
     private void Die()
     {
         if (_isDead)
@@ -232,18 +264,26 @@ public class EnemyBase : MonoBehaviour
         }
 
         _isDead = true;
-        Debug.Log("敌人死亡");
 
+        // 广播敌人死亡事件（波次生成/击杀统计订阅）
+        GameEvents.RaiseEnemyKilled(transform.position);
+
+        // 死亡动画（EnemyAnimator Base 层 Die 状态，Died 触发器）
         if (_animator != null)
         {
             _animator.SetFloat("Speed", 0f);
+            _animator.SetTrigger("Died");
         }
 
+        // 禁用导航与全部碰撞体，尸体静置不参与玩法
         if (_navAgent != null)
         {
-            _navAgent.ResetPath();
+            _navAgent.isStopped = true;
+            _navAgent.enabled = false;
         }
+        foreach (var col in GetComponentsInChildren<Collider>())
+            col.enabled = false;
 
-        Destroy(gameObject, 0.5f);
+        Destroy(gameObject, corpseDuration);
     }
 }

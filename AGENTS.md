@@ -15,6 +15,7 @@
 4. 新组件/类型使用前确认编译完成（editor_state 的 isCompiling）
 5. 涉及 Unity API 不确定时，用 unity_reflect / unity_docs 验证
 6. 每阶段完成要截图（manage_camera screenshot）给用户确认
+7. **每阶段完成输出功能总结**：用功能表形式总结本阶段开发了什么（功能/效果/新增/修改文件），并附「已完成阶段 / 待开发阶段」进度清单（4B 音效因 Key 未配置长期挂起，也列入）
 
 ## 目录结构约定
 

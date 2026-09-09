@@ -24,6 +24,7 @@ public class PauseMenuController : MonoBehaviour
     public Slider masterVolumeSlider;
     public Slider sfxVolumeSlider;
     public Slider fovSlider;
+    public Toggle autoShootToggle;   // F2：与主菜单对称的自动射击开关
     public Button backButton;
 
     [Header("暂停时禁用的游戏脚本")]
@@ -75,6 +76,8 @@ public class PauseMenuController : MonoBehaviour
             sfxVolumeSlider.onValueChanged.AddListener(v => PlayerPrefs.SetFloat("Settings.SFXVolume", v));
         if (fovSlider != null)
             fovSlider.onValueChanged.AddListener(v => PlayerPrefs.SetFloat("Settings.FOV", v));
+        if (autoShootToggle != null)
+            autoShootToggle.onValueChanged.AddListener(v => GameSettings.SetAutoShoot(v));
     }
 
     /// <summary>滑块填充手动控制（代码创建的 Slider 自动 Fill 不生效）</summary>
@@ -182,6 +185,8 @@ public class PauseMenuController : MonoBehaviour
             sfxVolumeSlider.value = PlayerPrefs.GetFloat("Settings.SFXVolume", 1f);
         if (fovSlider != null)
             fovSlider.value = PlayerPrefs.GetFloat("Settings.FOV", 75f);
+        if (autoShootToggle != null)
+            autoShootToggle.isOn = PlayerPrefs.GetInt("Settings.AutoShoot", 0) == 1;
     }
 
     private void ReturnToMainMenu()

@@ -745,6 +745,156 @@ Player/P08.../skeleton/.../hand_R（武器挂右手，用户手动改，Humanoid
 
 ---
 
+## 任务包 4A 完成记录（2026-09-06）
+
+> 编译：0 错误 0 警告 | 场景已保存 | 音效（4B）因 fal.ai Key 未配置顺延，顺序改为 4A → 4C → 4D → 4E → 4F → 阶段5 → 阶段6
+
+### 新增脚本（3 个）
+
+| 文件 | 说明 |
+|------|------|
+| `Assets/Scripts/Data/GameEvents.cs` | 静态事件总线（决策 D2）：玩家/敌人/表现/流程 4 组事件 + Raise 方法（`Raise{事件名去掉On}`）；事件只增不改签名 |
+| `Assets/Scripts/Data/ObjectPool.cs` | 通用对象池（静态类）：Prewarm/Get/Release + PoolTicket 票据组件；池根 DontDestroyOnLoad，场景切换自动清池 |
+| `Assets/Scripts/Audio/AudioManager.cs` | 音频单例：2D UI 音源×1 + 3D 音源池×8（轮询复用）；订阅 GameEvents 播音；Clip 字段留空待 4B 填入，空 Clip 静默跳过 |
+
+### 缺陷修复（F1~F4）
+
+| 编号 | 修复 |
+|------|------|
+| F1 | 切枪刷弹：WeaponManager 增加 `_ammoCache` 字典（槽位→弹匣/备弹），换枪销毁前保存、切回时经 `FirearmWeapon.pendingMagazine/pendingReserve` 挂起值在 Start 恢复（Instantiate 后直接 Set 会被延迟执行的 Start 覆盖——关键坑） |
+| F2 | 暂停菜单补 `autoShootToggle`（Toggle），读写走 `GameSettings.SetAutoShoot()`（同步 PlayerPrefs + 运行时缓存）；场景 PauseSettingsPanel 已建控件（FOV 滑块下方，BackButton 下移避让） |
+| F3 | EnemyBase 删除每 0.5s 状态日志与每帧追击日志（GetCurrentState 一并移除），保留的攻击/受击日志包 `#if UNITY_EDITOR` |
+| F4 | PlayerADSController 的 `GameObject.Find("TPSCamera")` 改为 `[SerializeField] tpsCamera` 序列化引用（场景已赋值），保留空值兜底查找 + 警告 |
+
+### 事件接线（4B/4C 的触发源）
+
+- FirearmWeapon.Shoot → `RaisePlayerShot(枪口位置, weaponData.name)`；ReloadRoutine → `RaiseReloadStart/End`
+- EnemyBase：攻击 → `RaiseEnemyShot`；受击 → `RaiseEnemyDamaged`；死亡 → `RaiseEnemyKilled`
+
+### 场景变更（SampleScene 已保存）
+
+- 新增根对象 `AudioManager`（AudioManager 组件，音源池 8）
+- Player/PlayerADSController.tpsCamera ← TPSCamera
+- Canvas/PauseSettingsPanel/AutoShootToggle（新建 UGUI Toggle，字体 LegacyRuntime）
+
+### 已知坑（追加）
+
+67. **Instantiate 后立即给组件字段赋值会被 Start 覆盖**（Awake/OnEnable 即时、Start 延迟到帧末）——切枪弹药恢复等"实例化后初始化"必须用挂起值模式（pending 字段在 Start 消费）
+68. `GameObject.Find` 找不到非激活对象，找隐藏 UI 用 `canvas.transform.Find(...)`
+69. 编辑器模式（非 Play）manage_camera 的 ScreenCapture 不可用，回退主相机渲染不含 Overlay UI；Overlay 面板的视觉验证需 Play 模式或 Scene View（大场景中 Overlay 矩形过远，截图效果差）
+
+---
+
+## 任务包 4C 完成记录（2026-09-06~07）
+
+> 编译：0 错误 0 警告 | 场景已保存 | 音效（4B）继续顺延（fal.ai Key 未配置）
+
+### 新增脚本（3 个）
+
+| 文件 | 说明 |
+|------|------|
+| `Assets/Scripts/Enemy/EnemyPart.cs` | 部位标记：isHead + Owner 懒查找父级 EnemyBase |
+| `Assets/Scripts/Combat/BulletTrail.cs` | 曳光组件：LineRenderer 两点连线，存活 lifetime（默认 0.08s）后自动 ObjectPool.Release |
+| `Assets/Scripts/Combat/CombatEffectsController.cs` | 战斗表现单例：订阅 GameEvents.OnBulletTrail → 对象池取曳光实例；prefab 引用 + 预热 8 |
+
+### EnemyBase 升级（4C 核心）
+
+| 项 | 内容 |
+|----|------|
+| 新字段 | `accuracy=0.7`（命中率，散布反向控制）、`corpseDuration=10`、`headshotMultiplier=2`（§7.2 的 bulletTrailPrefab 改挂 CombatEffectsController，场景级单点配置） |
+| Raycast 弹道（D1） | AttackPlayer 重做：敌人胸口(+1.5m)→玩家胸口(+1.2m) Raycast（range=attackRange+3），命中 PlayerHealth 才扣血——**隔墙扣血根治**；散布角 =(1-accuracy)×15°；广播 RaiseBulletTrail(起点,终点) |
+| 死亡重做 | Die(): RaiseEnemyKilled → `Animator.SetTrigger("Died")` → 禁用 NavMeshAgent+全部 Collider → corpseDuration 后 Destroy（原 0.5s） |
+| 部位碰撞体 | Start 时 SetupHeadPart：人形 Avatar 用 `GetBoneTransform(Head)` 挂 SphereCollider(r=0.16)+EnemyPart(isHead)——8 敌人运行时自动，无需场景配置 |
+| TakeDamage | 签名 `void → bool`（返回是否被击杀，供爆头击杀判定） |
+
+### FirearmWeapon 命中重做
+
+- `ApplyHit(hit)`：先查 EnemyPart（头/身）再回退 EnemyBase；爆头伤害 ×enemy.headshotMultiplier；命中敌人广播 `RaiseHitConfirmed`（4D HitMarker 订阅），爆头击杀广播 `RaiseHeadshotKilled`
+
+### EnemyAnimator.controller 变更（已磁盘验证）
+
+- Base 层新增 **Die 状态**（motion=`Animations/Humanoid/EquipedAnimations/Death/death.fbx` 的 death 剪辑，3.42s 不循环 Humanoid）+ AnyState→Die 转换（Died:If，duration 0.15，canTransitionToSelf=false）+ Died Trigger 参数
+- UpperBody 层不动：死亡后 _isDead 阻断 Update，不会再触发 Fire/Hit
+
+### 新增资产/场景对象
+
+- `Assets/Prefabs/FX_BulletTrail.prefab`（LineRenderer，宽 0.04，Sprites/Default 材质淡黄色）
+- SampleScene 新增根对象 `CombatEffects`（CombatEffectsController + prefab 引用）
+
+### 已知坑（追加）
+
+70. **Unity 2022 的 `AnimatorStateMachine.AddState/AddAnyStateTransition` 会自动把子对象注册进 controller 资产**，再手动 `AddObjectToAsset` 会抛 "Adding asset to object failed"；且异常前对象已落盘——验证持久化以 `AssetDatabase.ImportAsset` 后磁盘重载为准（坑 51 需按此更新：手动注册仅对未持久化对象执行 `IsPersistent` 检查后进行）
+71. `AnimatorStateTransition` 无 `isAnyState` 属性；AnyState 转换从 `stateMachine.anyStateTransitions` 枚举
+72. 编辑器 execute_code（CodeDom C#6）中 `Object` 与 object 二义性，须写 `UnityEngine.Object`
+73. **URP 项目中 `Sprites/Default` 着色器渲染洋红**（曳光首版变紫的根因）；且 SaveAsPrefabAsset 对运行时 new 的材质不保证内嵌持久化（sharedMaterial 变 NULL）——正确做法：材质建独立资产存 `Assets/Materials/`（URP/Unlit），经 `LoadPrefabContents → 赋材质 → SaveAsPrefabAsset` 写回预制体
+
+### 4C 热修复（2026-09-07 用户 Play 反馈：曳光洋红）
+
+- `FX_BulletTrail.prefab` 材质重建：Sprites/Default（URP 下洋红）→ **URP/Unlit 淡黄**，独立材质资产 `Assets/Materials/FX_BulletTrail.mat`，LoadPrefabContents 写回预制体，磁盘验证 shader/颜色正确
+
+### 4C 验收清单（待用户 Play 验证）
+
+- [ ] 隔墙/掩体后敌人**不再**扣血（掩体后站立验证）
+- [ ] 敌人开枪可见淡黄色曳光一闪（~0.08s）
+- [ ] 爆头伤害 = 普通×2（步枪 25→50，更快击杀）
+- [ ] 敌人死亡播死亡动画倒地，尸体静置 10s 后消失
+- [ ] accuracy 调 0 → 敌人几乎打不中；调 1 → 站桩必中
+
+---
+
+## 任务包 4D 完成记录（2026-09-08）
+
+> 编译：0 错误 0 警告 | 场景已保存 | 音效（4B）继续顺延
+
+### 新增/修改脚本
+
+| 文件 | 内容 |
+|------|------|
+| `GameEvents.cs` | 新增 `OnSurfaceHit(point, normal, isEnemy)` 事件 + RaiseSurfaceHit（只增不改） |
+| `FirearmWeapon.cs` | ApplyHit 广播 RaiseSurfaceHit：打敌人 isEnemy=true（血），打静态物 false（烟+痕） |
+| `CombatEffectsController.cs` | 扩展 4D 分支：bloodFxPrefab / impactSmokePrefab / bulletDecalPrefab 三引用；弹痕 50 上限环形队列；包内 FX 的 stopAction Destroy→Disable 兼容池化 |
+| `HitFeedbackUI.cs`（新建） | 挂 Canvas：HitMarker（命中放大淡出 0.15s，DOKill 防连发叠加）+ HEADSHOT 提示（弹出 0.12s→停 1s→淡出 0.3s） |
+
+### 新增资产（全部程序化生成）
+
+- `Assets/Textures/HitMarker.png`（64×64 白色 X，Sprite）
+- `Assets/Textures/BulletHole.png`（64×64 黑芯+噪声碎裂环）
+- `Assets/Materials/FX_BulletDecal.mat`（URP/Unlit + AlphaTest，queue 2450）
+- `Assets/Prefabs/FX_BulletDecal.prefab`（Quad 0.14m 无阴影，贴弹孔贴图）
+- 复用包内 FX：`BloodSplat_FX.prefab`（敌人命中）、`GunShot_Smoke_FX.prefab`（静态命中）
+
+### 场景变更（SampleScene 已保存）
+
+- Canvas 新增 `HitMarker`（中心 30×30）与 `HeadshotText`（"HEADSHOT!" 屏幕中上部，默认隐藏），HitFeedbackUI 字段已挂接
+- CombatEffects 三特效引用已赋值
+
+### 已知坑（追加）
+
+74. **编辑器 execute_code（CodeDom）环境无 `using UnityEngine.UI` / `using System`**：UI 类型写 `UnityEngine.UI.Image/Text` 全限定名；`Random` 与 System.Random 二义须写 `UnityEngine.Random`
+
+### 4D 验收清单（待用户 Play 验证）
+
+- [ ] 打中敌人：溅血 + 准星中心白色 X 闪现
+- [ ] 打墙/地面：烟尘 + 黑色弹痕（多打几发弹痕正确贴墙面）
+- [ ] 连发射击 HitMarker 不闪烁卡死
+- [ ] 爆头击杀出现 "HEADSHOT!" 弹出提示
+- [ ] 弹痕超过 50 个后最早的形成循环覆盖（肉眼难验，可不测）
+
+### 4D 热修复 + 全面审查（2026-09-08 用户反馈：HEADSHOT 不显示）
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 爆头判定/×2 伤害/HEADSHOT 提示整条链从未触发 | **敌人根部 CapsuleCollider（h=2.0，顶到 y=2.0）把头部（y≈1.57）整个包在内部**，射线打头先命中胶囊表面（判为身体），头部 EnemyPart 球体永远轮不到 | SetupHeadPart 同时收缩胶囊体到 0~1.5m（height=1.5, center=0.75）覆盖躯干腿，头部球体 r 加大到 0.18（覆盖 ~1.4~1.75），两者衔接不遮挡 |
+| 连续爆头 UI 叠加隐患 | HEADSHOT 的 DOTween Sequence 未存引用，旧序列 OnComplete 会中途隐藏新提示 | 序列存 `_headshotSeq` 字段，触发时先 Kill 旧序列 |
+
+**审查结论（4A/4C/4D 其余项均通过）**：F1 弹药缓存（缓存/挂起值/Start 消费链路正确）；F2 AutoShoot 双向绑定；F3/F4 已修；Raycast 弹道挡弹正确；曳光材质 URP/Unlit 正常；死亡→Died 触发→禁用碰撞→10s 销毁链路正确；对象池跨场景边界（池根 DontDestroyOnLoad + 键随预制体销毁自然重建）安全；HitFeedbackUI 场景引用完好；CombatEffects 四特效引用完好。
+
+**已知坑（追加）**
+
+75. **给角色添加部位碰撞体时必须检查根部胶囊体的遮挡**：默认 2m 胶囊把头部包在内部，Physics.Raycast 永远先命中胶囊，部位判定（爆头）静默失效——部位碰撞体方案必须配套收缩主碰撞体或分层射线掩码
+
+---
+
 ## 下一阶段
 
 > **规划基准已迁移至 [DEVELOPMENT_PLAN.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVELOPMENT_PLAN.md)（2026-09-06 创建）**——后续开发以该文档为准，包含完整差距分析、已确认决策（D1 Raycast弹道 / D2 轻量静态事件 / D3 波次生存模式 / D4 任务包顺序）、接口定义、进度计划与测试策略。

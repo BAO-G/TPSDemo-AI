@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -25,6 +26,9 @@ public class WeaponManager : MonoBehaviour
 
     private int _lastAmmo;
     private int _lastReserve;
+
+    // F1 修复：各槽位弹药缓存（切枪销毁前保存、切回时恢复，不再刷满弹）
+    private readonly Dictionary<int, (int mag, int reserve)> _ammoCache = new();
 
     private void Start()
     {
@@ -97,15 +101,21 @@ public class WeaponManager : MonoBehaviour
         if (index == _currentWeaponIndex && _currentWeapon != null)
             return;
 
+        int oldIndex = _currentWeaponIndex;
         _currentWeaponIndex = index;
-        EquipWeapon(weapons[index]);
+        EquipWeapon(weapons[index], oldIndex);
         // 触发切枪动画（ChangeWeapon 层）
         _animator?.SetTrigger("ChangeWeapon");
     }
 
-    public void EquipWeapon(GameObject weaponPrefab)
+    /// <summary>装备武器；oldSlotIndex 为换下武器的槽位（用于保存其弹药缓存）</summary>
+    public void EquipWeapon(GameObject weaponPrefab, int oldSlotIndex = -1)
     {
         if (weaponPrefab == null || weaponHolder == null) return;
+
+        // F1：换下武器前把当前弹药存入对应槽位缓存
+        if (_currentWeapon != null && oldSlotIndex >= 0)
+            _ammoCache[oldSlotIndex] = (_currentWeapon.GetCurrentAmmo(), _currentWeapon.GetReserveAmmo());
 
         if (_currentWeapon != null)
             Destroy(_currentWeapon.gameObject);
@@ -120,6 +130,12 @@ public class WeaponManager : MonoBehaviour
         }
         else
         {
+            // F1：槽位有缓存则写入挂起值，武器 Start 时恢复（Instantiate 后 Start 延迟执行，直接 Set 会被覆盖）
+            if (_ammoCache.TryGetValue(_currentWeaponIndex, out var cached))
+            {
+                _currentWeapon.pendingMagazine = cached.mag;
+                _currentWeapon.pendingReserve = cached.reserve;
+            }
             _lastAmmo = _currentWeapon.GetCurrentAmmo();
             _lastReserve = _currentWeapon.GetReserveAmmo();
             OnAmmoChanged?.Invoke(_lastAmmo, _currentWeapon.GetMaxAmmo());
