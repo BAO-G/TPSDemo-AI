@@ -28,6 +28,14 @@ public class CombatEffectsController : MonoBehaviour
     [Header("弹痕上限（环形覆盖）")]
     public int maxDecals = 50;
 
+    [Header("4E 爆炸特效（PolygonBattleRoyale Explosion_Small_FX）")]
+    public GameObject explosionFxPrefab;
+
+    [Header("4E 震屏（TPSCamera 上的 CameraShaker）")]
+    public CameraShaker cameraShaker;
+    public float shakeBaseAmplitude = 0.8f;         // 爆心震屏幅度
+    public float shakeRange = 25f;                  // 震屏有效范围（米，超出不震）
+
     // 弹痕环形队列：超上限回收最早的复用
     private readonly Queue<GameObject> _decals = new();
 
@@ -44,18 +52,38 @@ public class CombatEffectsController : MonoBehaviour
             ObjectPool.Prewarm(bloodFxPrefab, 4);
         if (impactSmokePrefab != null)
             ObjectPool.Prewarm(impactSmokePrefab, 4);
+        if (explosionFxPrefab != null)
+            ObjectPool.Prewarm(explosionFxPrefab, 2);
     }
 
     private void OnEnable()
     {
         GameEvents.OnBulletTrail += HandleBulletTrail;
         GameEvents.OnSurfaceHit += HandleSurfaceHit;
+        GameEvents.OnExplosion += HandleExplosion;
     }
 
     private void OnDisable()
     {
         GameEvents.OnBulletTrail -= HandleBulletTrail;
         GameEvents.OnSurfaceHit -= HandleSurfaceHit;
+        GameEvents.OnExplosion -= HandleExplosion;
+    }
+
+    /// <summary>爆炸表现：爆炸特效 + 按距离衰减震屏（音效由 4B AudioManager 接）</summary>
+    private void HandleExplosion(Vector3 pos)
+    {
+        SpawnFx(explosionFxPrefab, pos, Vector3.up);
+
+        if (cameraShaker != null)
+        {
+            // 震屏距离以主相机（玩家视点）为准
+            var cam = Camera.main;
+            float dist = cam != null ? Vector3.Distance(cam.transform.position, pos) : float.MaxValue;
+            float falloff = Mathf.Clamp01(1f - dist / shakeRange);
+            if (falloff > 0f)
+                cameraShaker.Shake(shakeBaseAmplitude * falloff);
+        }
     }
 
     private void HandleBulletTrail(Vector3 start, Vector3 end)

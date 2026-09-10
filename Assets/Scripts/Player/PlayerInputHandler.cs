@@ -23,6 +23,7 @@ public class PlayerInputHandler : MonoBehaviour
     private InputAction _switchWeapon1Action;
     private InputAction _switchWeapon2Action;
     private InputAction _switchWeapon3Action;
+    private InputAction _grenadeAction;
 
     private void Awake()
     {
@@ -46,6 +47,7 @@ public class PlayerInputHandler : MonoBehaviour
         _switchWeapon1Action = _playerInput.actions.FindAction("SwitchWeapon1");
         _switchWeapon2Action = _playerInput.actions.FindAction("SwitchWeapon2");
         _switchWeapon3Action = _playerInput.actions.FindAction("SwitchWeapon3");
+        _grenadeAction = _playerInput.actions.FindAction("Grenade");
 
         // 确保 ActionMap 已启用（修复 PlayerInput 未自动激活的问题）
         _playerInput.actions.FindActionMap("Player")?.Enable();
@@ -157,6 +159,12 @@ public class PlayerInputHandler : MonoBehaviour
         if (_switchWeapon2Action != null && _switchWeapon2Action.WasPressedThisFrame()) return 1;
         if (_switchWeapon3Action != null && _switchWeapon3Action.WasPressedThisFrame()) return 2;
         return -1;
+    }
+
+    /// <summary>手雷键是否本帧按下（G）</summary>
+    public bool IsGrenadePressed()
+    {
+        return _grenadeAction != null && _grenadeAction.WasPressedThisFrame();
     }
 
     /// <summary>冲刺键是否按住（直接检测键盘，不依赖 InputActionAsset）</summary>

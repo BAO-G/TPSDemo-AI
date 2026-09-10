@@ -12,6 +12,7 @@ public class UIManager : MonoBehaviour
     public Slider healthSlider;
     public Text ammoText;
     public Text medkitText;             // 医疗包数量文字
+    public Text grenadeText;            // 手雷数量文字（4E）
     public Image redVignetteImage;      // 径向渐变受伤晕影
 
     [Header("受伤反馈参数")]
@@ -69,6 +70,13 @@ public class UIManager : MonoBehaviour
         if (_playerHealth != null)
             UpdateMedkitDisplay(_playerHealth.MedkitCount);
 
+        // 初始化手雷显示（Start 晚于 GrenadeThrower 的初始广播，这里主动拉一次）
+        var thrower = _weaponManager != null
+            ? _weaponManager.GetComponent<GrenadeThrower>()
+            : GameObject.FindWithTag("Player")?.GetComponent<GrenadeThrower>();
+        if (thrower != null)
+            UpdateGrenadeDisplay(thrower.GrenadeCount);
+
         StartCoroutine(SyncAmmoAfterWeaponReady());
     }
 
@@ -83,6 +91,17 @@ public class UIManager : MonoBehaviour
         {
             _playerHealth?.TryHeal();
         }
+    }
+
+    private void OnEnable()
+    {
+        // 手雷数量走全局事件总线（GrenadeThrower 广播）
+        GameEvents.OnGrenadeCountChanged += UpdateGrenadeDisplay;
+    }
+
+    private void OnDisable()
+    {
+        GameEvents.OnGrenadeCountChanged -= UpdateGrenadeDisplay;
     }
 
     private void OnDestroy()
@@ -170,5 +189,12 @@ public class UIManager : MonoBehaviour
     {
         if (medkitText != null)
             medkitText.text = $"医疗包: {count}";
+    }
+
+    // ===== 手雷显示（4E） =====
+    private void UpdateGrenadeDisplay(int count)
+    {
+        if (grenadeText != null)
+            grenadeText.text = $"手雷: {count}";
     }
 }

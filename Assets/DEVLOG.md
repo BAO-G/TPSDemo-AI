@@ -895,6 +895,85 @@ Player/P08.../skeleton/.../hand_R（武器挂右手，用户手动改，Humanoid
 
 ---
 
+## 任务包 4E 完成记录（2026-09-09）
+
+> 编译：0 错误 0 警告 | 场景已保存 | Play 模式链路验证通过 | 音效（4B）继续顺延（爆炸音效接口已留：OnExplosion 事件已广播，4B 时 AudioManager 直接订阅）
+
+### 新增脚本（3 个）
+
+| 文件 | 说明 |
+|------|------|
+| `Assets/Scripts/Combat/Grenade.cs` | 投掷物逻辑：5s 引信（OnEnable 重置，池化安全）→ Explode：OverlapSphere 半径 5m 范围伤害（敌我都炸，HashSet 按根组件去重——敌人头/身双碰撞体只结算一次），伤害按爆心到目标碰撞体最近点距离线性衰减（边缘系数 0.3）→ 广播 OnExplosion → ObjectPool.Release 回池 |
+| `Assets/Scripts/Player/GrenadeThrower.cs` | 挂 Player：G 键（IsGrenadePressed）→ 扣数量广播 OnGrenadeCountChanged → Animator 触发 Toss → 0.9s 出手延迟（Inspector 可调）→ 初速 = 视线×10 + up×7，出手点胸口前移 0.5m 防碰自身胶囊；死亡中断投掷；AddGrenades() 留给阶段5 拾取物 |
+| `Assets/Scripts/Player/CameraShaker.cs` | 挂 TPSCamera：Shake(amplitude) 取历史最大 → Update 每帧 Lerp 衰减写入 Cinemachine Perlin 的 AmplitudeGain（归零钳制防噪声常驻） |
+
+### 修改脚本（4 个，均只增不改）
+
+| 文件 | 内容 |
+|------|------|
+| `GameEvents.cs` | +`OnGrenadeCountChanged(int)` + RaiseGrenadeCountChanged |
+| `PlayerInputHandler.cs` | +`_grenadeAction` + `IsGrenadePressed()`（与 Crouch/Heal 同模式） |
+| `CombatEffectsController.cs` | +explosionFxPrefab / cameraShaker / shakeBaseAmplitude=0.8 / shakeRange=25；订阅 OnExplosion：池化生成 Explosion_Small_FX + 按主相机距离衰减震屏（>25m 不震） |
+| `UIManager.cs` | +grenadeText 字段 + UpdateGrenadeDisplay；订阅 OnGrenadeCountChanged（OnEnable/OnDisable 配对），Start 主动拉取一次防错过初始广播 |
+
+### 输入 / 动画 / 资产
+
+| 类型 | 内容 |
+|------|------|
+| inputactions | +Grenade 动作（Button）+ `<Keyboard>/g` 绑定（BOM 保留，资产验证通过） |
+| PlayerAnimator.controller | UpperBody 层 +Toss 状态（motion=toss grenade.fbx 的 mixamo.com 剪辑，3.2s Humanoid）+ AnyState→Toss（Toss 触发，0.1s，不可自转）+ Toss→Empty（exitTime 0.95）；磁盘重载验证（坑70） |
+| `Assets/Prefabs/Grenade_Thrown.prefab` | 包内 SM_Wep_Grenade_01 复制改名：MeshCollider→SphereCollider(r=0.07)+GrenadeBounce 物理材质 + Rigidbody(mass 0.4/ContinuousDynamic/Interpolate) + Grenade(引信5/半径5/伤害100)；无资源包 prefab 关联 |
+| `Assets/Materials/GrenadeBounce.physicMaterial` | bounciness 0.45（bounceCombine Maximum）+ 摩擦 0.6 |
+| `Assets/Data/ExplosionShake.asset` | CM3 NoiseSettings：位置噪声 amp 0.25/freq 12 + 朝向噪声 amp 2.5°/freq 18（高频短促爆炸抖动） |
+
+### 场景接线（SampleScene 已保存）
+
+- Player +GrenadeThrower（grenadePrefab/aimCamera=TPSCamera/_inputHandler 已赋值）+ 暂停数组追加
+- TPSCamera +CinemachineBasicMultiChannelPerlin（NoiseProfile=ExplosionShake，AmplitudeGain=0）+ CameraShaker
+- CombatEffects：explosionFxPrefab=包内 Explosion_Small_FX / cameraShaker 已赋值
+- Canvas +GrenadeText（右下角锚点复制 MedkitText，其上方 34px）+ UIManager.grenadeText 已赋值
+
+### Play 验证结果（execute_code 实测）
+
+| 项 | 结果 |
+|----|------|
+| G 键链路 | Grenade 动作+绑定在资产中；TryThrow 计数 3→2、UI 同步 ✅ |
+| 投掷物理 | 受控投掷初速 (0,7,10) 正常飞行，无穿透报错 ✅ |
+| 引信 | 投出后真实间隔 >5s 时已爆炸回池（多次一致）✅ |
+| 敌人伤害 | 敌人脚下爆炸 200→100（贴身满伤 100）✅ |
+| 炸自己 | 玩家 4m 处 100→51（衰减公式精确吻合：胶囊最近点 3.5m→falloff 0.3→51）✅ |
+| 距离衰减 | 30.8m 外爆炸玩家无伤、不震屏（>25m 范围外，正确）✅ |
+| 爆炸特效 | Explosion_Small_FX 池化实例激活播放 ✅ |
+| 震屏闭环 | Shake→_amplitude→次帧 Perlin.AmplitudeGain=0.242（衰减中），相机被噪声驱动 ✅ |
+| 对象池 | Prewarm 2 + 投掷 1 回收后共 3 循环复用 ✅ |
+
+### 已知坑（追加）
+
+76. **给预制体 Collider 赋物理材质必须用 `sharedMaterial`**：`collider.material` 属性是实例化引用（返回场景实例副本），LoadPrefabContents 里赋值后 SaveAsPrefabAsset 会丢失（验证 mat=NULL）；`sharedMaterial` 直接引资产才落盘
+77. **CM3 命名空间是 `Unity.Cinemachine` 而非旧版 `Cinemachine`**，且 CM3 无 `InvalidateComponentPipeline`（组件管线自动重建）；`Rigidbody.linearDamping/angularDamping` 是 Unity 6 字段名，2022.3 仍是 `drag/angularDrag`
+78. **execute_code 两次调用间的真实间隔远超体感**（模型回复耗时），Play 时序类验证（引信 5s、动画播完回落）不能以"调用间隔 2s"为准——手雷"2 秒后消失"实为间隔已 >5s 的正常爆炸，池回收计数是判定爆炸发生的可靠证据
+
+### 4E 验收清单（待用户 Play 验证）
+
+- [ ] G 键投掷：角色播 toss 动画（上身），0.9s 后手雷出手（出手时机可在 GrenadeThrower.throwDelay 调）
+- [ ] 手雷抛物线飞行、落地弹跳 1~2 次（bounciness 0.45）
+- [ ] 5s 后爆炸：爆炸特效 + 近处震屏 + 敌人/玩家均掉血
+- [ ] 右下角 HUD「手雷: N」随投掷递减，0 枚时按 G 无效
+- [ ] 掩体后扔雷可隔墙炸到敌人（OverlapSphere 无视线检测，属设计预期）
+
+### 4E 热修复（2026-09-10 用户反馈：惯性大弹太远 / 投掷方向不明确）
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 轻微碰撞弹很远（碰敌人也弹飞） | 物理材质 bounciness 0.45 且 bounceCombine=**Maximum**（恒取两材质最大值，敌方默认材质 0 也不起作用）；无空气阻力；敌人碰撞无特殊处理 | 弹性 0.45→0.3、组合改 **Average**；Grenade.OnCollisionEnter 碰 EnemyBase 时速度 ×0.15、角速 ×0.3（雷落敌人脚边） |
+| 落点方向不可读 | 初速取相机 forward（越肩视角与准星视线有夹角）；高抛弧线（up 7/fwd 10）落点难预判；小球无视觉追踪特征 | **瞄点投掷**：从准星（Camera.main 屏幕中心，与 CrosshairController 同源）发射线命中点为投掷目标，所见即所投；弧线改平直（fwd 12/up 5）；预制体加 TrailRenderer（0.35s 淡色拖尾，`FX_GrenadeTrail.mat` URP/Unlit）+ 投掷赋予随机自转（spinSpeed 12），肉眼可追踪 |
+
+**验证**（Play 实测）：瞄点初速与期望值逐位一致（dot>0.99）；拖尾/自转生效；10 m/s 直冲敌人碰撞后剩 0.29 m/s 落于脚边。
+
+**新注意点**：Grenade.OnEnable 会用 fuseTime 字段重置引信——运行时测试改引信必须同时改字段和 `_fuseTimer`（反射），只改字段会被下一次 Get 时的 OnEnable 覆盖。
+
+---
+
 ## 下一阶段
 
 > **规划基准已迁移至 [DEVELOPMENT_PLAN.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVELOPMENT_PLAN.md)（2026-09-06 创建）**——后续开发以该文档为准，包含完整差距分析、已确认决策（D1 Raycast弹道 / D2 轻量静态事件 / D3 波次生存模式 / D4 任务包顺序）、接口定义、进度计划与测试策略。

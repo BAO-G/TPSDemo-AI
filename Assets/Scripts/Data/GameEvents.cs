@@ -42,6 +42,9 @@ public static class GameEvents
     /// <summary>子弹命中表面（命中点,法线,是否命中敌人）——4D 新增：血特效/命中烟尘/弹痕共用</summary>
     public static event Action<Vector3, Vector3, bool> OnSurfaceHit;
 
+    /// <summary>手雷数量变化（4E：HUD 显示剩余手雷）</summary>
+    public static event Action<int> OnGrenadeCountChanged;
+
     // ===== 流程（阶段5） =====
     /// <summary>波次开始（波号）</summary>
     public static event Action<int> OnWaveStarted;
@@ -85,4 +88,6 @@ public static class GameEvents
     public static void RaiseWaveCleared(int wave) => OnWaveCleared?.Invoke(wave);
 
     public static void RaiseUIClick() => OnUIClick?.Invoke();
+
+    public static void RaiseGrenadeCountChanged(int count) => OnGrenadeCountChanged?.Invoke(count);
 }
