@@ -1,8 +1,9 @@
 # TPS 战术射击游戏 · 开发计划文档
 
 > **文档版本**：v1.0 | **创建日期**：2026-09-06 | **状态**：已确认，执行中
+> **进度快照（2026-09-29）**：✅4A → ⏸4B（挂起，等 fal.ai Key）→ ✅4C → ✅4D → ✅4E（含手感热修复+敌人攻击转向修复）→ ⬜4F → ⬜阶段5（前置：需先重建敌人预制体，见 DEVLOG 会话5）→ ⬜阶段6
 > **读者**：后续参与开发的 AI Agent（architect / coder / explore）及人类开发者
-> **配套文档**：[DEVLOG.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVLOG.md)（开发日志与已知坑总库，**必读**）
+> **配套文档**：[DEVLOG.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVLOG.md)（开发日志与已知坑总库，**必读**，最新进度见文末「会话 5」）
 > **项目规则**：[AGENTS.md](file:///k:/Unity/UnityProject/AI%20Test/AGENTS.md)（角色权限边界，铁律）
 
 ---
