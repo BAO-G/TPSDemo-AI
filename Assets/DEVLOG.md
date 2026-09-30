@@ -1,6 +1,6 @@
 ﻿# TPS 战术射击游戏 — 开发日志
 
-> 最后更新：2026-08-31 | 当前阶段：阶段 4（打磨）进行中 — 主菜单/关卡替换/暂停菜单已完成，剩余：音效/粒子特效/敌人死亡动画/手雷/性能优化
+> 最后更新：2026-09-29 | 当前进度：**任务包 4E 手雷已完成**（含手感热修复×2 + 敌人攻击转向修复）；4B 音效挂起（无 fal.ai Key）；待开发：4F 武器手感 → 阶段5 流程闭环 → 阶段6 AI 深度。规划基准见 [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)，最新会话记录见文末「会话 5」。
 
 ---
 
@@ -971,6 +971,66 @@ Player/P08.../skeleton/.../hand_R（武器挂右手，用户手动改，Humanoid
 **验证**（Play 实测）：瞄点初速与期望值逐位一致（dot>0.99）；拖尾/自转生效；10 m/s 直冲敌人碰撞后剩 0.29 m/s 落于脚边。
 
 **新注意点**：Grenade.OnEnable 会用 fuseTime 字段重置引信——运行时测试改引信必须同时改字段和 `_fuseTimer`（反射），只改字段会被下一次 Get 时的 OnEnable 覆盖。
+
+### 4E 热修复 2（2026-09-10 用户反馈：落地后滑行很远，摩擦/Drag 调参无效）
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 落地后滚很远，PhysicMaterial 摩擦调到 0.9 + Rigidbody Drag 0.3~0.5 均无效 | **球体滚动不受摩擦衰减**：摩擦只对接触点有相对滑动的"滑动"做功，球落地后很快转为纯滚动（接触点无相对滑动），Unity 也不模拟滚动阻力；Drag 在低速段衰减太慢 | Grenade.cs 加**滚动钳停**：碰撞接触面法线 y>0.5 视为接地（OnCollisionEnter/Stay 置位、FixedUpdate 消费后重置），接地且速度 < groundStopSpeed（默认 1.5，Inspector 可调）→ 速度/角速直接归零 |
+
+**验证**（Play 实测）：4 m/s 贴地水平投出，滑行 4.71m 后速度精确归零停死（旧版会持续滚动至引信耗尽）。
+
+**认知更正**：坑 79 的"物理材质"修正补充——摩擦参数对球体类投掷物的滚动阶段基本无效，调参只影响滑动段；"停得稳"必须靠速度钳停类逻辑。滑行距离感仍偏长时调大 groundStopSpeed（如 2.5）即可缩短。
+
+### 4E 顺手修复（2026-09-10 用户反馈：敌人站桩开枪时模型不面向玩家）
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 敌人朝玩家开枪时身体不面向玩家（子弹/曳光却正确飞向玩家） | `AttackPlayer()` 用 `isStopped` 停住 NavMeshAgent 后**无任何转向逻辑**——NavMeshAgent 只在沿路径移动时自动转向，站桩后模型朝向冻结在停下的瞬间；而 Raycast 弹道是纯数学（胸口→玩家胸口），与模型面朝无关 | AttackPlayer 每帧水平转向玩家（`Quaternion.RotateTowards`，新字段 `attackTurnSpeed=360°/s`），同时 `agent.updateRotation=false` 接管转向；Patrol/ChasePlayer 恢复 `updateRotation=true` 归还转向权 |
+
+**验证**（Play 实测）：玩家传送至敌人后方 8m 攻击圈内，1 秒内敌人 forward 与"指向玩家"夹角 0.0°、updateRotation=False（接管中）；截图肉眼确认模型正面朝玩家举枪射击。
+
+**注意**：执行_code 里测 `head.position - hips.position` 的 XZ 方向判断视觉朝向不可靠（Polygon 骨骼轴向非标准 + 动画姿态噪声，实测读出 -159° 假象），视觉朝向验证以截图为准。
+
+---
+
+## 会话 5 记录（2026-09-10~09-29：任务包 4E 手雷全程 + 手感热修复 + 敌人攻击转向修复）
+
+> 本段记录 f87ca2d 提交前后的全部工作与结论，供下一轮对话/新 Agent 直接续接。
+
+### 一、4E 交付内容（已提交 f87ca2d，详录见上文任务包 4E 完成记录）
+
+- 新脚本：`Grenade.cs`（引信/范围伤害/池化）、`GrenadeThrower.cs`（G键/瞄点投掷）、`CameraShaker.cs`（震屏）
+- 修改：GameEvents（+OnGrenadeCountChanged/复用 OnExplosion）、PlayerInputHandler（+G键）、CombatEffectsController（+爆炸特效/震屏接线）、UIManager（+手雷计数）、inputactions（+Grenade）、PlayerAnimator（UpperBody 层 +Toss 状态）
+- 资产：Grenade_Thrown.prefab、GrenadeBounce.physicMaterial、FX_GrenadeTrail.mat、ExplosionShake.asset（CM3 噪声档）
+- 新增坑 76~78（sharedMaterial 落盘 / CM3 命名空间 / execute_code 时序）
+
+### 二、f87ca2d 之后的后续修复（**未提交 git**，见下方清单）
+
+| 项 | 内容 | 文件 |
+|----|------|------|
+| 手雷滑行热修复 | 球体滚动不受摩擦衰减（调摩擦/Drag 无效），Grenade 加**滚动钳停**：接地（接触法线 y>0.5）且速度 < `groundStopSpeed`（默认1.5，预制体 Inspector 可调）→ 速度归零；实测 4m/s 投出滑行 4.7m 停死 | `Grenade.cs` |
+| 手雷手感（f87ca2d 已含部分）+ 用户手调 | 用户在 Inspector 手调过 GrenadeBounce 摩擦与预制体 Rigidbody Drag，最终数值以 Inspector 为准；预制体含拖尾 | `Grenade_Thrown.prefab` |
+| 敌人攻击转向修复 | 攻击站桩时 NavMeshAgent 不转向（只在移动时转）→ 模型背对玩家开枪；修复：AttackPlayer 每帧 RotateTowards 玩家（`attackTurnSpeed=360°/s`）+ 临时 updateRotation=false，巡逻/追击归还；实测夹角 0.0° | `EnemyBase.cs` |
+| 资源包材质自动迁移 | Unity 加载爆炸 FX 时自动同步 URP 字段（无害单向，还原后还会复发，建议下次提交时一并入库） | `PolygonBattleRoyale_FX_Dirt.mat` |
+
+### 三、待开发内容（按计划 §5.6~§5.8 顺序）
+
+| 任务包 | 内容 | 状态 |
+|--------|------|------|
+| **4B 音效** | generate_audio 生成全套音效；AudioManager Clip 字段已全部留空，事件钩子（射击/换弹/脚步/受击/爆炸 OnExplosion/UI）4A 起就绪，配置 fal.ai Key 后可随时插队 | ⏸ 挂起 |
+| **4F 武器手感** | WeaponSway + HeadBob，参照 `K:\Unity\UnityProject\TPS Shooter\Scripts\Entities\Player\Weapon\` 下 WeaponSway.cs / HeadBob.cs 抄参数量级 | ⬜ |
+| **阶段5 流程闭环** | GameManager 状态机（接管暂停）/ GameOverPanel 结算（击杀数/波次/存活时间）/ EnemyWaveGenerator + WaveConfig SO / 击杀统计 HUD | ⬜ |
+| **阶段6 AI 深度** | FOV+视线+噪音三重感知 / Search 记忆 / 侧移射击 / 敌人血条 / 受击方向指示 / 掩体切角 / UI 美化 / 性能收官（实施前需 architect 详设） | ⬜ |
+
+### 四、下一阶段建议（给用户与新 Agent）
+
+1. **推进顺序**：4F（小包）→ 4B（Key 配好即插队）→ 阶段5 → 阶段6。4F 与 4B 互不依赖，顺序可换。
+2. **⚠️ 阶段5 前置依赖（易被忽略）**：场景中的 8 个敌人是**无 prefab 关联的散装实例**（敌人 prefab 在阶段3.5 回滚时已删除）——波次生成器刷怪必须先重建 Enemy_Soldier/Scout/Heavy 预制体（含 EnemyBase/NavMeshAgent/CapsuleCollider/差异化数值/模型），这是阶段5 的第一个实际任务。
+3. **阶段5 开工前需用户拍板的 3 个决策**（计划 §10.2 标注）：① 最后一波后无限循环波还是胜利画面；② 现有 8 个固定敌人是编入首波还是保留为巡逻守卫+波次另算；③ 手雷拾取物是否随阶段5 一并做。
+4. **4F 实现要点**：武器挂在 hand_R 骨骼下（非直接挂根），Sway/HeadBob 改的是挂点局部偏移，与 PlayerADSController 的 adsPositionOffset 叠加时注意两者都改 WeaponHolder local，需明确叠加顺序防互相覆盖；ADS 时 Sway 幅度应收窄。
+5. **工作流**：新 Agent 开工前读本文件「项目概况→会话5」+ DEVELOPMENT_PLAN.md 即可上手；用户说「按流程来」＝方案先行+确认+独立审查，说「直接修」＝自主完成+记 DEVLOG（会话 4 已与用户确认此约定）。
+6. **工程纪律**：每个任务包完成立即 git 提交（坑 48 教训）；本次 5 个未提交文件建议新对话开工前先提交。
 
 ---
 

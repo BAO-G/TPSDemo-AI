@@ -236,6 +236,7 @@ MonoBehaviour:
   explosionRadius: 5
   maxDamage: 100
   edgeDamageFactor: 0.3
+  groundStopSpeed: 5
 --- !u!96 &3104723968279017247
 TrailRenderer:
   serializedVersion: 3

@@ -17,9 +17,13 @@ public class Grenade : MonoBehaviour
     public float maxDamage = 100f;                  // 爆心最大伤害
     [Range(0f, 1f)] public float edgeDamageFactor = 0.3f;  // 半径边缘伤害系数（线性衰减到边缘）
 
+    [Header("滚动钳停")]
+    public float groundStopSpeed = 1.5f;            // 接地且速度低于该值 → 立即刹停（球体滚动不受摩擦衰减，必须钳停）
+
     private float _fuseTimer;
     private bool _exploded;
     private Rigidbody _rb;
+    private bool _grounded;                         // 本物理帧内是否有类地面接触（法线朝上）
 
     private void Awake()
     {
@@ -43,6 +47,17 @@ public class Grenade : MonoBehaviour
             Explode();
     }
 
+    private void FixedUpdate()
+    {
+        // 滚动钳停：接地 + 低速 → 速度/角速直接归零（摩擦力对球体滚动几乎无衰减作用）
+        if (_grounded && _rb.velocity.magnitude < groundStopSpeed)
+        {
+            _rb.velocity = Vector3.zero;
+            _rb.angularVelocity = Vector3.zero;
+        }
+        _grounded = false;  // 每个物理帧重置，由本帧碰撞事件重新置位
+    }
+
     /// <summary>
     /// 碰撞手感：碰到敌人快速卸力，让手雷落在敌人脚边而非弹飞；
     /// 一般碰撞的低弹性由 GrenadeBounce 物理材质（bounciness 0.3 / Average）控制
@@ -55,6 +70,25 @@ public class Grenade : MonoBehaviour
         {
             _rb.velocity *= 0.15f;
             _rb.angularVelocity *= 0.3f;
+        }
+        UpdateGrounded(collision);
+    }
+
+    private void OnCollisionStay(Collision collision)
+    {
+        UpdateGrounded(collision);
+    }
+
+    /// <summary>接触面法线朝上视为地面（区别于墙面/敌人侧身），供钳停判断</summary>
+    private void UpdateGrounded(Collision collision)
+    {
+        foreach (var contact in collision.contacts)
+        {
+            if (contact.normal.y > 0.5f)
+            {
+                _grounded = true;
+                return;
+            }
         }
     }
 

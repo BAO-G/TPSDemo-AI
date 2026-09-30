@@ -24,6 +24,7 @@ public class EnemyBase : MonoBehaviour
     [Header("远程攻击(4C新增)")]
     [Range(0f, 1f)] public float accuracy = 0.7f;  // 命中率（越低散布角越大）
     public float corpseDuration = 10f;             // 尸体保留时长（秒）
+    public float attackTurnSpeed = 360f;           // 攻击站桩时朝向玩家的转速（度/秒）
 
     [Header("部位(4C新增)")]
     public float headshotMultiplier = 2f;          // 爆头伤害倍率（FirearmWeapon 读取）
@@ -129,6 +130,7 @@ public class EnemyBase : MonoBehaviour
 
         // 从攻击状态恢复移动
         _navAgent.isStopped = false;
+        _navAgent.updateRotation = true;    // 把转向权还给 NavMeshAgent
 
         if (patrolPoints == null || patrolPoints.Length == 0)
         {
@@ -166,11 +168,12 @@ public class EnemyBase : MonoBehaviour
 
         // 从攻击状态恢复移动（攻击时 isStopped=true，若不移除会一直卡在原地）
         _navAgent.isStopped = false;
+        _navAgent.updateRotation = true;    // 把转向权还给 NavMeshAgent
         _navAgent.speed = chaseSpeed;
         _navAgent.SetDestination(_playerTransform.position);
     }
 
-    /// <summary>攻击玩家：停下 → 冷却结束后从胸口向玩家胸口 Raycast（决策 D1），命中才扣血（掩体天然挡弹）</summary>
+    /// <summary>攻击玩家：停下 → 转身面向玩家 → 冷却结束后从胸口向玩家胸口 Raycast（决策 D1），命中才扣血（掩体天然挡弹）</summary>
     private void AttackPlayer()
     {
         if (_navAgent != null)
@@ -178,6 +181,21 @@ public class EnemyBase : MonoBehaviour
             // 用 isStopped 停住 NavMeshAgent，代替 SetDestination(自身)，避免路径重算阻塞
             _navAgent.isStopped = true;
             _navAgent.velocity = Vector3.zero;
+            // NavMeshAgent 只在移动时自动转向；站桩攻击必须接管转向，否则模型背对玩家开枪
+            if (_navAgent.updateRotation)
+                _navAgent.updateRotation = false;
+        }
+
+        // 每帧水平转向玩家（在冷却判断之前，保证转动连续）
+        if (_playerTransform != null)
+        {
+            Vector3 toPlayer = _playerTransform.position - transform.position;
+            toPlayer.y = 0f;
+            if (toPlayer.sqrMagnitude > 0.001f)
+            {
+                Quaternion targetRot = Quaternion.LookRotation(toPlayer);
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRot, attackTurnSpeed * Time.deltaTime);
+            }
         }
 
         if (Time.time - _lastAttackTime < attackCooldown)
