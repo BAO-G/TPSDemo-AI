@@ -16,6 +16,9 @@ public class PlayerADSController : MonoBehaviour
     [Header("相机引用（场景中拖入 TPSCamera，F4：替代字符串查找）")]
     [SerializeField] private CinemachineCamera tpsCamera;
 
+    [Header("武器挂点引用（场景中拖入 WeaponHolder；实际挂在 hand_R 骨骼下，直接子级查找会落空）")]
+    [SerializeField] private Transform weaponHolder;
+
     [Header("武器贴枪偏移（相对挂点默认位置的偏移量）")]
     public Vector3 adsPositionOffset = new Vector3(-0.12f, 0.45f, 0.15f); // 抬至眼线并对齐屏幕中线
     public Vector3 adsRotationOffset = Vector3.zero;
@@ -60,11 +63,23 @@ public class PlayerADSController : MonoBehaviour
 
         _animator = GetComponentInChildren<Animator>();
 
-        // 缓存武器挂点默认位置
-        var weaponHolderObj = transform.Find("WeaponHolder");
-        if (weaponHolderObj != null)
+        // 缓存武器挂点默认位置（序列化引用优先；兜底递归查找——WeaponHolder 在 hand_R 骨骼下，
+        // transform.Find 只查直接子级会静默落空，导致 ADS 贴枪整体失效）
+        if (weaponHolder != null)
         {
-            _weaponHolder = weaponHolderObj;
+            _weaponHolder = weaponHolder;
+        }
+        else
+        {
+            foreach (var t in GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "WeaponHolder") { _weaponHolder = t; break; }
+            }
+            if (_weaponHolder == null)
+                Debug.LogWarning("PlayerADSController 未找到 WeaponHolder（请拖入 weaponHolder 引用），ADS 贴枪不生效", this);
+        }
+        if (_weaponHolder != null)
+        {
             _defaultWeaponPosition = _weaponHolder.localPosition;
             _defaultWeaponRotation = _weaponHolder.localRotation;
         }

@@ -1,6 +1,6 @@
 ﻿# TPS 战术射击游戏 — 开发日志
 
-> 最后更新：2026-09-29 | 当前进度：**任务包 4E 手雷已完成**（含手感热修复×2 + 敌人攻击转向修复）；4B 音效挂起（无 fal.ai Key）；待开发：4F 武器手感 → 阶段5 流程闭环 → 阶段6 AI 深度。规划基准见 [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)，最新会话记录见文末「会话 5」。
+> 最后更新：2026-09-30 | 当前进度：**任务包 4F 武器手感已完成**（WeaponSway + HeadBob + ADS 挂点引用修复）；4B 音效挂起（无 fal.ai Key）；待开发：阶段5 流程闭环（前置：重建敌人预制体）→ 阶段6 AI 深度。规划基准见 [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)，最新会话记录见文末「任务包 4F 完成记录」。
 
 ---
 
@@ -1034,8 +1034,74 @@ Player/P08.../skeleton/.../hand_R（武器挂右手，用户手动改，Humanoid
 
 ---
 
+## 任务包 4F 完成记录（2026-09-30）
+
+> 编译：0 错误 0 警告 | 场景已保存 | Play 静止状态验证通过（零漂移/零报错）| 音效（4B）继续顺延
+
+### 新增脚本（2 个）
+
+| 文件 | 说明 |
+|------|------|
+| `Assets/Scripts/Player/WeaponSway.cs` | 挂 WeaponHolder：按鼠标视角增量对挂点做附加偏移（位置 + 小幅旋转，SmoothDamp 回位，参照 TPS Shooter 参数量级）；**ADS 时幅度按进度收窄**（adsSwayMultiplier=0.3）；玩家死亡时目标归零 |
+| `Assets/Scripts/Player/HeadBob.cs` | 挂 CameraTarget：移动时正弦起伏（垂直 2 倍频弹跳 + 半频左右重心横摆），幅度随实际速度缩放；蹲伏 ×0.5、ADS 渐变至 ×0.4；静止/空中/死亡 SmoothDamp 归位 |
+
+### 修改脚本（2 个，均只增不改行为）
+
+| 文件 | 内容 |
+|------|------|
+| `PlayerController.cs` | +`HorizontalSpeed` / `IsGrounded` 两个只读属性（HeadBob 等表现层读取，替代直接访问私有字段） |
+| `PlayerADSController.cs` | **修挂点引用**：+`[SerializeField] weaponHolder` 序列化引用（F4 同模式），兜底改递归查找——原 `transform.Find("WeaponHolder")` 只查直接子级，而 WeaponHolder 实际挂在 hand_R 骨骼下，**ADS 贴枪偏移自会话 3 武器挂到手骨起就静默失效** |
+
+### 叠加架构（核心设计）
+
+```
+每帧写入顺序（脚本执行顺序保证）：
+1. Update  PlayerADSController 全权重写 WeaponHolder.localPosition/localRotation
+           = Lerp(默认姿势, 默认姿势+adsOffset, ADS进度)   ←「贴枪基准」
+2. LateUpdate WeaponSway 先减去上一帧自己写的附加量还原基准，
+           再叠加平滑后的新附加量（反向于视角旋转，钳制上限） ←「附加偏移」
+CameraTarget：PlayerController 只写 localRotation（俯仰视角），
+              HeadBob 只写 localPosition（起伏）→ 各占一个通道，与 Cinemachine 不打架
+```
+
+- HeadBob 选址结论：**放 CameraTarget 不放 WeaponHolder**——WeaponHolder 在手骨下，bob 会让枪相对手浮动穿帮；CameraTarget 是 Cinemachine 跟随目标，bob 即视角自然起伏，且其 localPosition 无人占用
+- Sway 偏移在**玩家坐标系**计算（右/上轴）再经 `parent.worldToLocalMatrix` 转入手骨局部空间写入——手骨朝向任意（localRot 307/100/20），直接写局部轴会沿奇怪方向摇
+
+### 场景接线（SampleScene 已保存）
+
+- WeaponHolder +WeaponSway、CameraTarget +HeadBob（参数均为脚本默认值，Inspector 可调）
+- PlayerADSController.weaponHolder ← WeaponHolder（实例赋值）；**adsPositionOffset 归零**——旧值 (-0.12,0.45,0.15) 是按阶段 2 的"Player 直接子级挂点"调的，坐标基准已随挂到手骨而失效，若保留会在修复引用后突然生效把枪甩飞；ADS 贴枪偏移如需要请按手骨局部坐标重新手调
+- PauseMenuController.disableOnPause 追加两个新组件（共 8 个）
+
+### Play 验证结果（execute_code 实测）
+
+| 项 | 结果 |
+|----|------|
+| 组件挂载/启用 | WeaponSway、HeadBob 均挂载且 enabled ✅ |
+| ADS 挂点引用 | weaponHolder 序列化引用生效，无"未找到"警告 ✅ |
+| 静止漂移 | 两次跨帧读数 WeaponHolder/CameraTarget 局部值逐位一致，附加量无累积 ✅ |
+| 控制台 | 0 错误 0 警告 ✅ |
+| 截图 | 游戏画面/HUD 正常，静止姿态无位移异常 ✅ |
+| 跑/走/蹲/ADS 手感 | ⏳ 待用户实际跑图验收（输入无法程序模拟，坑 28） |
+
+### 已知坑（追加）
+
+80. **`transform.Find` 只查直接子级**：WeaponHolder 挂到手骨（hand_R）后，PlayerADSController 的直接子级查找静默返回 null，整段 ADS 贴枪代码失效且无任何报错——跨层级找挂点用序列化引用 + `GetComponentsInChildren` 兜底，并加空值警告
+81. **execute_code 的 CodeDom 编译域持有旧程序集快照**：新编译的脚本类型在 execute_code 里不可直接引用（typeof 同程序集旧类型可用），但**运行时多态可用**——`GetComponents<MonoBehaviour>()` 后按 `GetType().Name` 匹配即可操作新组件；manage_components 在编辑器进程内执行不受此限（需先 refresh_unity 真正完成编译）
+
+### 4F 验收清单（待用户 Play 验证）
+
+- [ ] 原地转视角：武器小幅落后于视角并平滑回位（甩头越快偏移越大，有上限）
+- [ ] 跑/走：视角轻微上下起伏 + 左右摆，跑比走明显
+- [ ] 蹲伏/ADS：起伏明显变小；ADS 中转视角武器晃动收窄
+- [ ] 静止站立：武器与视角完全归位，无残余晃动
+- [ ] 手感数值不满意时调 Inspector：WeaponSway（positionAmount/maxPositionOffset）、HeadBob（bobbingSpeed/bobbingAmount）均在挂点组件上
+
+---
+
 ## 下一阶段
 
 > **规划基准已迁移至 [DEVELOPMENT_PLAN.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVELOPMENT_PLAN.md)（2026-09-06 创建）**——后续开发以该文档为准，包含完整差距分析、已确认决策（D1 Raycast弹道 / D2 轻量静态事件 / D3 波次生存模式 / D4 任务包顺序）、接口定义、进度计划与测试策略。
+
 
 执行顺序：**4A 基础设施**（GameEvents/AudioManager/ObjectPool + 缺陷F1~F4修复）→ **4B 音效**（generate_audio）→ **4C 敌人升级**（死亡动画/Raycast弹道+曳光/部位伤害）→ **4D 命中反馈**（粒子/HitMarker/弹痕）→ **4E 手雷** → **4F 武器手感**（Sway/HeadBob）→ **阶段5 流程闭环**（GameManager/波次生成/结算界面）→ **阶段6 AI深度**（三重感知/Search/侧移/血条/UI美化/性能）

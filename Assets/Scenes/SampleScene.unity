@@ -188,6 +188,7 @@ MonoBehaviour:
   chaseSpeed: 6.5
   accuracy: 0.7
   corpseDuration: 10
+  attackTurnSpeed: 360
   headshotMultiplier: 2
 --- !u!195 &29107587
 NavMeshAgent:
@@ -429,6 +430,8 @@ MonoBehaviour:
   - {fileID: 1904380088646673900}
   - {fileID: 487045250}
   - {fileID: 1904380088646673904}
+  - {fileID: 1697871904}
+  - {fileID: 1697871903}
 --- !u!114 &85339438
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -806,6 +809,7 @@ MonoBehaviour:
   chaseSpeed: 6.5
   accuracy: 0.7
   corpseDuration: 10
+  attackTurnSpeed: 360
   headshotMultiplier: 2
 --- !u!195 &177397918
 NavMeshAgent:
@@ -2174,6 +2178,7 @@ MonoBehaviour:
   chaseSpeed: 5.5
   accuracy: 0.7
   corpseDuration: 10
+  attackTurnSpeed: 360
   headshotMultiplier: 2
 --- !u!195 &441088430
 NavMeshAgent:
@@ -2280,6 +2285,7 @@ MonoBehaviour:
   chaseSpeed: 3.5
   accuracy: 0.7
   corpseDuration: 10
+  attackTurnSpeed: 360
   headshotMultiplier: 2
 --- !u!195 &445460839
 NavMeshAgent:
@@ -3284,6 +3290,7 @@ MonoBehaviour:
   chaseSpeed: 5.5
   accuracy: 0.7
   corpseDuration: 10
+  attackTurnSpeed: 360
   headshotMultiplier: 2
 --- !u!195 &782875887
 NavMeshAgent:
@@ -3995,6 +4002,7 @@ MonoBehaviour:
   chaseSpeed: 3.5
   accuracy: 0.7
   corpseDuration: 10
+  attackTurnSpeed: 360
   headshotMultiplier: 2
 --- !u!195 &925339743
 NavMeshAgent:
@@ -6660,6 +6668,61 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 30, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &1697871900 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7759351457301237141, guid: 0dd7c5eab266670458ff98d112733dc7,
+    type: 3}
+  m_PrefabInstance: {fileID: 1904380088646673898}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &1697871901 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8459842496085334159, guid: 0dd7c5eab266670458ff98d112733dc7,
+    type: 3}
+  m_PrefabInstance: {fileID: 1904380088646673898}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &1697871902 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1375302784291474506, guid: 0dd7c5eab266670458ff98d112733dc7,
+    type: 3}
+  m_PrefabInstance: {fileID: 1904380088646673898}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1697871903
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1697871900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d38a7e7250a2374fbf8ec76900a55d1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _bobbingSpeed: 7
+  _bobbingAmount: 0.05
+  _lateralMultiplier: 0.4
+  _returnSmooth: 8
+  _crouchMultiplier: 0.5
+  _adsMultiplier: 0.4
+--- !u!114 &1697871904
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1697871902}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0184e8629ed947468a3877d04dd8224, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _positionAmount: 0.001
+  _maxPositionOffset: 0.035
+  _positionSmooth: 6
+  _rotationAmount: 0.15
+  _maxRotationOffset: 3
+  _rotationSmooth: 8
+  _adsSwayMultiplier: 0.3
 --- !u!1 &1701358613
 GameObject:
   m_ObjectHideFlags: 0
@@ -7097,6 +7160,7 @@ MonoBehaviour:
   chaseSpeed: 5.5
   accuracy: 0.7
   corpseDuration: 10
+  attackTurnSpeed: 360
   headshotMultiplier: 2
 --- !u!195 &1765766140
 NavMeshAgent:
@@ -8346,6 +8410,7 @@ MonoBehaviour:
   chaseSpeed: 5.5
   accuracy: 0.7
   corpseDuration: 10
+  attackTurnSpeed: 360
   headshotMultiplier: 2
 --- !u!195 &2059067210
 NavMeshAgent:
@@ -8474,6 +8539,26 @@ PrefabInstance:
       propertyPath: tpsCamera
       value: 
       objectReference: {fileID: 1727287022}
+    - target: {fileID: 2117885549666618884, guid: 0dd7c5eab266670458ff98d112733dc7,
+        type: 3}
+      propertyPath: weaponHolder
+      value: 
+      objectReference: {fileID: 1697871901}
+    - target: {fileID: 2117885549666618884, guid: 0dd7c5eab266670458ff98d112733dc7,
+        type: 3}
+      propertyPath: adsPositionOffset.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2117885549666618884, guid: 0dd7c5eab266670458ff98d112733dc7,
+        type: 3}
+      propertyPath: adsPositionOffset.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2117885549666618884, guid: 0dd7c5eab266670458ff98d112733dc7,
+        type: 3}
+      propertyPath: adsPositionOffset.z
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2174213166406553038, guid: 0dd7c5eab266670458ff98d112733dc7,
         type: 3}
       propertyPath: m_RotationOffset.x
@@ -8775,10 +8860,18 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 1904380088646673904}
+    - targetCorrespondingSourceObject: {fileID: 7759351457301237141, guid: 0dd7c5eab266670458ff98d112733dc7,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1697871903}
     - targetCorrespondingSourceObject: {fileID: 8771782297823963391, guid: 0dd7c5eab266670458ff98d112733dc7,
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 487045250}
+    - targetCorrespondingSourceObject: {fileID: 1375302784291474506, guid: 0dd7c5eab266670458ff98d112733dc7,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1697871904}
   m_SourcePrefab: {fileID: 100100000, guid: 0dd7c5eab266670458ff98d112733dc7, type: 3}
 --- !u!4 &1904380088646673899 stripped
 Transform:

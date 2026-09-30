@@ -35,6 +35,12 @@ public class PlayerController : MonoBehaviour
     /// <summary>当前血量，供 ADS/Cover 控制器读取</summary>
     public float CurrentHealth => _playerHealth != null ? _playerHealth.CurrentHealth : 100f;
 
+    /// <summary>本帧水平速度大小，供 HeadBob 等表现层读取</summary>
+    public float HorizontalSpeed => _horizontalVelocity.magnitude;
+
+    /// <summary>是否在地面，供 HeadBob 等表现层读取</summary>
+    public bool IsGrounded => _characterController != null && _characterController.isGrounded;
+
     private void Start()
     {
         _characterController = GetComponent<CharacterController>();
