@@ -59,14 +59,16 @@ public class EnemyBase : MonoBehaviour
     }
 
     /// <summary>头部部位碰撞体（4C 部位伤害）：人形 Avatar 时在 Head 骨骼挂球形碰撞体 + EnemyPart 标记
-    /// 同时收缩根部胶囊体到躯干腿部（0~1.5m）——默认 2m 胶囊把头部包在内部，射线先命中胶囊导致爆头判定永远失效（4D 热修复）</summary>
+    /// 同时收缩根部胶囊体——默认 2m 胶囊把头部包在内部，射线先命中胶囊导致爆头判定失效（4D 热修复）
+    /// 二次修复（4D 实测）：胶囊 1.4 + 头球 r=0.22 球心偏移 +0.08 对准视觉头骨（首版 r=0.18 无偏移时，
+    /// 下颌段被胶囊遮挡、头顶段超出球体，可判头区域仅 ~1.5~1.77 一条窄带，实战几乎无法触发爆头）</summary>
     private void SetupHeadPart()
     {
         var bodyCap = GetComponent<CapsuleCollider>();
         if (bodyCap != null)
         {
-            bodyCap.height = 1.5f;
-            bodyCap.center = new Vector3(0f, 0.75f, 0f);
+            bodyCap.height = 1.4f;
+            bodyCap.center = new Vector3(0f, 0.7f, 0f);
         }
 
         if (_animator == null || _animator.avatar == null || !_animator.avatar.isHuman)
@@ -75,7 +77,8 @@ public class EnemyBase : MonoBehaviour
         if (head == null || head.GetComponent<EnemyPart>() != null)
             return;
         var col = head.gameObject.AddComponent<SphereCollider>();
-        col.radius = 0.18f;
+        col.center = new Vector3(0f, 0.08f, 0f);   // Head 骨骼枢轴在颈部，球心上移对准头骨
+        col.radius = 0.22f;
         var part = head.gameObject.AddComponent<EnemyPart>();
         part.isHead = true;
     }
