@@ -50,6 +50,7 @@ public class PlayerHealth : MonoBehaviour
             // 触发死亡动画（Base Layer 的 Die 状态，AnyState 转移）
             _animator?.SetTrigger("Died");
             OnDeath?.Invoke();
+            GameEvents.RaisePlayerDeath(); // 阶段5：广播总线供 GameManager 结算（实例事件 OnDeath 保留不动）
         }
     }
 

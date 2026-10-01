@@ -52,6 +52,12 @@ public static class GameEvents
     public static event Action<int> OnWaveCleared;
     /// <summary>UI 点击音</summary>
     public static event Action OnUIClick;
+    /// <summary>玩家阵亡结算（延迟后由 GameManager 广播，结算面板订阅）——阶段5 新增</summary>
+    public static event Action OnGameOver;
+    /// <summary>全部波次清空胜利——阶段5 新增</summary>
+    public static event Action OnGameVictory;
+    /// <summary>击杀数变化（GameManager 累加后广播，HUD 订阅）——阶段5 新增</summary>
+    public static event Action<int> OnKillCountChanged;
 
     // ===== Raise 方法（内部 null 检查，命名 Raise{事件名去掉On}） =====
 
@@ -90,4 +96,10 @@ public static class GameEvents
     public static void RaiseUIClick() => OnUIClick?.Invoke();
 
     public static void RaiseGrenadeCountChanged(int count) => OnGrenadeCountChanged?.Invoke(count);
+
+    public static void RaiseGameOver() => OnGameOver?.Invoke();
+
+    public static void RaiseGameVictory() => OnGameVictory?.Invoke();
+
+    public static void RaiseKillCountChanged(int count) => OnKillCountChanged?.Invoke(count);
 }

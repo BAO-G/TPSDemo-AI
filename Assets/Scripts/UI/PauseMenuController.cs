@@ -4,9 +4,9 @@ using UnityEngine.InputSystem;
 using DG.Tweening;
 
 /// <summary>
-/// 暂停菜单：Tab 键切换暂停/继续
+/// 暂停菜单（纯 UI）：Tab 键切换暂停/继续
 /// 功能：继续游戏、设置（灵敏度/FOV/音量/自动射击）、返回主菜单
-/// 暂停时 timeScale=0、解锁鼠标、禁用游戏脚本；恢复时还原
+/// timeScale/脚本禁用/场景加载职责已迁移 GameManager（阶段5），本类只管面板切换与设置控件
 /// </summary>
 public class PauseMenuController : MonoBehaviour
 {
@@ -27,10 +27,6 @@ public class PauseMenuController : MonoBehaviour
     public Toggle autoShootToggle;   // F2：与主菜单对称的自动射击开关
     public Button backButton;
 
-    [Header("暂停时禁用的游戏脚本")]
-    public MonoBehaviour[] disableOnPause;
-
-    private bool _isPaused;
     private bool _inSettings;
 
     private void Start()
@@ -41,6 +37,12 @@ public class PauseMenuController : MonoBehaviour
 
     private void Update()
     {
+        // 结算状态（GameOver/Victory）下 Tab 不再响应暂停
+        if (GameManager.Instance != null
+            && (GameManager.Instance.State == GameManager.GameState.GameOver
+                || GameManager.Instance.State == GameManager.GameState.Victory))
+            return;
+
         // Tab 键切换（设置面板内按 Tab 返回暂停菜单）
         var input = FindAnyObjectByType<PlayerInputHandler>();
         bool pausePressed = input != null ? input.IsPausePressed()
@@ -50,7 +52,7 @@ public class PauseMenuController : MonoBehaviour
         {
             if (_inSettings)
                 CloseSettings();
-            else if (_isPaused)
+            else if (GameManager.Instance != null && GameManager.Instance.State == GameManager.GameState.Paused)
                 Resume();
             else
                 Pause();
@@ -109,8 +111,9 @@ public class PauseMenuController : MonoBehaviour
 
     private void Pause()
     {
-        _isPaused = true;
-        Time.timeScale = 0f;
+        // 状态守卫：非 Playing（GameOver/Victory/已 Paused）不响应，面板不得叠加在结算面板上
+        if (GameManager.Instance == null || GameManager.Instance.State != GameManager.GameState.Playing) return;
+        GameManager.Instance.Pause();
 
         // 暂停菜单显示（alpha 恢复为可见，使用不受 timeScale 影响的动画）
         pausePanel.gameObject.SetActive(true);
@@ -121,34 +124,16 @@ public class PauseMenuController : MonoBehaviour
 
         // 加载当前设置值
         LoadSettings();
-
-        // 解锁鼠标
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
-
-        // 禁用游戏脚本（防止暂停时移动/射击）
-        foreach (var comp in disableOnPause)
-            if (comp != null)
-                comp.enabled = false;
     }
 
     private void Resume()
     {
-        _isPaused = false;
-        Time.timeScale = 1f;
+        if (GameManager.Instance == null || GameManager.Instance.State != GameManager.GameState.Paused) return;
+        GameManager.Instance.Resume();
 
         pausePanel.gameObject.SetActive(false);
         settingsPanel.gameObject.SetActive(false);
         _inSettings = false;
-
-        // 重新锁定鼠标
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
-
-        // 恢复游戏脚本
-        foreach (var comp in disableOnPause)
-            if (comp != null)
-                comp.enabled = true;
     }
 
     private void OpenSettings()
@@ -191,9 +176,8 @@ public class PauseMenuController : MonoBehaviour
 
     private void ReturnToMainMenu()
     {
-        Time.timeScale = 1f;
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
-        UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+        // timeScale/鼠标/场景加载全部由 GameManager 处理
+        if (GameManager.Instance != null)
+            GameManager.Instance.ReturnToMenu();
     }
 }

@@ -1,6 +1,6 @@
 # TPS 战术射击游戏 — 开发日志
 
-> 最后更新：2026-09-30 | 当前进度：**任务包 4F 武器手感已完成**（WeaponSway + HeadBob + ADS 挂点引用修复）；4B 音效挂起（无 fal.ai Key）；待开发：阶段5 流程闭环（前置：重建敌人预制体）→ 阶段6 AI 深度。规划基准见 [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)，最新会话记录见文末「任务包 4F 完成记录」。
+> 最后更新：2026-10-01 | 当前进度：**阶段 5 流程闭环 S1~S6 全部完成**（敌人预制体重建/GameManager/结算界面/波次生成/胜利流程/击杀HUD/手雷补给），待 explore 审查 + 用户 Play 终验；4B 音效挂起（无 fal.ai Key）；待开发：阶段6 AI 深度。规划基准见 [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)，阶段 5 详设见 [PHASE5_PLAN.md](PHASE5_PLAN.md)，实施记录见文末「阶段 5 实施记录」。
 
 ---
 
@@ -1103,6 +1103,165 @@ CameraTarget：PlayerController 只写 localRotation（俯仰视角），
 - [ ] 蹲伏/ADS：起伏明显变小；ADS 中转视角武器晃动收窄
 - [ ] 静止站立：武器与视角完全归位，无残余晃动
 - [ ] 手感数值不满意时调 Inspector：WeaponSway（positionAmount/maxPositionOffset）、HeadBob（bobbingSpeed/bobbingAmount）均在挂点组件上
+
+---
+
+## 阶段 5 实施记录（2026-09-30，按 PHASE5_PLAN.md S1→S6 逐步）
+
+### S1：敌人预制体重建（完成）
+
+> 编译 0 错误 0 警告 | 场景未动（8 散装敌人保留供回归）| Play 临时实例化验证通过
+
+**产出**：`Assets/Prefabs/Enemy_Soldier.prefab` / `Enemy_Scout.prefab` / `Enemy_Heavy.prefab`（从场景实例 `PrefabUtility.SaveAsPrefabAsset` 标准路径，未手拼；场景实例保持散装、未建立关联）
+
+**迁移数值实录**（以场景实例为准，逐项核对）：
+
+| 变体 | 血量 | 巡逻速度 | 追击速度 | 伤害 | 冷却 | 爆头倍率 | 代理人参数 |
+|------|------|---------|---------|------|------|---------|-----------|
+| Soldier | 100 | 3 | 5.5 | 3 | 1.0 | ×2 | 全变体一致：spd3.5/ang120/accel8/stop0.5（EnemyBase 按状态动态改 agent.speed） |
+| Scout | 60 | 4 | 6.5 | 2 | 0.8 | ×2 | 同上 |
+| Heavy | 200 | 2 | 3.5 | 6 | 1.5 | ×2 | 同上 |
+
+- 公共：accuracy 0.7 / detectRange 20 / attackRange 15 / corpseDuration 10 / attackTurnSpeed 360 / 胶囊 h=2 c=1 r=0.4 / Animator=EnemyAnimator + CharactersAvatar / 模型 MilitaryMale_01・SportyMale_01・MercenaryMale_01
+- **patrolPoints 场景引用自动断链置空（数组长度保留、元素全 null）= 预期行为**；prefab 内 0 missing 引用
+- 根胶囊保持 h=2.0（运行时 SetupHeadPart 收缩），符合坑 75 逻辑不动
+
+**Play 验证**：三预制体临时实例化 → EnemyBase/NavMeshAgent/胶囊齐全、落 NavMesh（y=0.17）、无路点原地待命 0 报错、SetupHeadPart 自动收缩胶囊至 1.4 + 生成头球 r=0.22（isHead=true）✅；验证后测试实例已销毁
+
+### S2：GameManager 骨架 + PauseMenu 职责迁移（完成）
+
+> 编译 0 错误 0 警告 | Play 链路验证通过 | 截图：S2_pause_panel_migrated.png
+
+**新增脚本**：`Assets/Scripts/Data/GameManager.cs`——状态机 `Playing ⇄ Paused`（GameOver/Victory 留待 S3/S5 接入）；`Pause()/Resume()` 接管 timeScale+disableOnPause（8 组件）+鼠标锁；`Restart()`=重载 SampleScene、`ReturnToMenu()`=加载 MainMenu；`SurvivalTime` 仅 Playing 时累计（timeScale=0 天然不计时）；`KillCount/CurrentWave` 字段就位（S4/S6 接入）
+
+**修改脚本**：`PauseMenuController.cs`——删 `disableOnPause` 字段/timeScale 管理/LoadScene 三项职责（全部改调 GameManager.Instance）；Tab 检测新增 GameOver/Victory 状态屏蔽（本次预留，S3 起生效）；面板切换、设置控件绑定、滑块填充逻辑保留不动
+
+**场景接线**：新增根对象 `GameManager`（GameManager 组件）；disableOnPause 数组 8 组件从 PauseMenuController 迁移赋值（先迁移后删字段，无数据丢失）；场景已保存
+
+**Play 验证**（按钮 onClick / 反射调私有方法，Tab 键输入本身无法模拟但该段代码未变）：
+
+| 项 | 结果 |
+|----|------|
+| Pause | State=Paused、timeScale=0、鼠标解锁、面板显示、8/8 脚本禁用 ✅ |
+| Resume | State=Playing、timeScale=1、鼠标锁定、面板关闭、8/8 脚本恢复 ✅ |
+| 设置开/关 | settings 面板 ↔ pause 面板切换正常（与迁移前等价）✅ |
+| 回主菜单 | mainMenuButton.onClick → 场景切至 MainMenu ✅ |
+| 控制台 | 0 错误 0 警告 ✅ |
+
+### S3：死亡流程 + GameOverPanel 阵亡态（完成）
+
+> 编译 0 错误 0 警告 | Play 全链路验证通过 | 截图：S3_gameover_panel_clean.png
+
+**新增脚本**：`Assets/Scripts/UI/GameOverPanelController.cs`——订阅 OnGameOver/OnGameVictory（OnEnable/OnDisable 配对退订）；标题 YOU DIED 红 / VICTORY 绿、数据三行（击杀/波次 N/Max/时间 mm:ss）从 GameManager 拉取；重玩/回主菜单按钮调 GameManager 并广播 RaiseUIClick（4B 预留）；DOTween 序列存 `_showSeq` 字段、触发前 Kill（4D 教训）
+
+**修改脚本**：
+- `GameEvents.cs`：+`OnGameOver` / `OnGameVictory` / `OnKillCountChanged(int)` 三事件 + Raise（只增不改）
+- `PlayerHealth.cs`：死亡分支补一行 `GameEvents.RaisePlayerDeath()`（实例事件 OnDeath 保留）
+- `GameManager.cs`：订阅 OnPlayerDeath（OnEnable/OnDisable 配对）→ State=GameOver + 禁用 8 组件 + 解锁鼠标（**不置 timeScale=0**）→ 延迟 gameOverDelay(1.5s) 广播 RaiseGameOver；+MaxWave/SetCurrentWave/SetMaxWave（S4 波次生成器用）；死亡后重复 TakeDamage 由 State!=Playing 守卫兜底
+- `PauseMenuController.cs`：Pause/Resume 入口补状态守卫（热修：GameOver 态直调 Pause 曾出现暂停面板叠加在结算面板上，输入路径本有 Update 屏蔽、守卫为防御性双保险）
+
+**新增资产/场景**：`Assets/Textures/GameOverBackdrop.png`（程序化 64×64 暗底，RedVignette 同模式）；Canvas 下新建 `GameOverPanel`（暗底 Image + CanvasGroup，默认隐藏）+ TitleText + StatsText + RestartButton/MenuButton（复用 BtnNormal 样式 + LegacyRuntime 字体）；GameOverPanelController 挂 Canvas，引用已接线；场景已保存
+
+**Play 验证**（execute_code 直调 TakeDamage(9999)，坑 28）：
+
+| 项 | 结果 |
+|----|------|
+| 死亡即时 | State=GameOver、hp=0、8/8 脚本禁用、鼠标解锁、timeScale 保持 1 ✅ |
+| 1.5s 后 | 结算面板淡入（alpha 1.00）、YOU DIED 红标题、击杀 0/波次 0/时间正确 ✅ |
+| Tab 屏蔽 | GameOver 态调 Pause：状态守卫拒绝，暂停面板不出现 ✅ |
+| 重玩 | onClick → 场景重载 → State=Playing、hp=100、手雷=3、KillCount=0、面板隐藏、鼠标锁定 ✅ |
+| 控制台 | 0 错误 0 警告 ✅ |
+
+### S4：波次系统核心 + 首波上线（完成）
+
+> 编译 0 错误 0 警告 | Play 全链路验证通过 | 截图：S4_wave1_hunting.png
+
+**新增脚本**：
+- `Assets/Scripts/Data/WaveConfig.cs`——SO 混兵种条目数组（§3 修订版：entries[{prefab,count}] + spawnInterval/startDelay）
+- `Assets/Scripts/Enemy/EnemyWaveGenerator.cs`——挂 WaveSystem 根对象；状态机 Preparing(10s)→Spawning(1.5s 逐刷)→Fighting(List<EnemyBase> 登记+IsDead 轮询等全灭)→Intermission(startDelay 倒计时)→下一波；末波清空 RaiseGameVictory（S5 接 UI）；出生点=距玩家>20m 随机/无则最远 + NavMesh.SamplePosition 2m 容差（不重烘焙）；刷出即置 `huntPlayer=true`（坑 67 安全：新字段无 Start 重置）；GameOver/Victory 态不推进波次（实测意外验证：玩家死亡后生成器正确停机）；每波开始 AddGrenades(1)（D7，钳制已在 GrenadeThrower.maxGrenades=3）
+
+**修改脚本**：`EnemyBase.cs` 只增三处——①`public bool IsDead => _isDead`（存活判定专用，尸体 10s 销毁期不算存活）②`public bool huntPlayer` 字段 ③Update 分支 `huntPlayer` 时 attackRange 外直追（无视 detectRange）
+
+**新增资产/场景**：`Assets/Data/WaveConfig.asset`（S4 先填 Wave1=士兵4/侦察2/重装2、Wave2=士兵4/侦察4，S5 补满）；场景新增 `WaveSystem` 根对象（WaveGenerator + SpawnPoints/6 个临时出生点，全部 SamplePosition 命中现有 NavMesh，y=0.04~0.25）；waveConfig/spawnPoints/grenadeThrower(Player) 已接线；**Enemies 与 PatrolPoints 分组 SetActive(false) 停用保留**（D6，全链路验证通过后由用户决定删除）；场景已保存
+
+**Play 验证**：
+
+| 项 | 结果 |
+|----|------|
+| 开场准备 | Preparing 10s 倒计时 → 自动开波 ✅ |
+| Wave1 | 8/8 刷出（1.5s 间隔）、huntPlayer 8/8、从远处出生点逼近至 14.2m（截图多方向围攻）✅ |
+| 波清空 | 全灭 → Fighting 清零 → RaiseWaveCleared → Intermission ✅ |
+| Wave2 | 5s 后 8/8 刷出、huntPlayer 8/8、CurrentWave=2 ✅ |
+| 结算停机 | 玩家死亡 → State=GameOver → 生成器停止刷怪（守卫生效）✅ |
+| 控制台 | 0 错误 0 警告 ✅ |
+
+**说明**：KillCount 计数按计划留 S6（击杀 HUD 一起接）；波间倒计时 UI/WaveBanner 留 S5。
+
+### S5：胜利流程 + WaveBanner + 5 波表 + 出生点完善（完成）
+
+> 编译 0 错误 0 警告 | Play 加速验证通过 | 截图：S5_victory_panel.png
+
+**新增脚本**：`Assets/Scripts/UI/WaveBannerController.cs`——Canvas 中央大字横幅：波开始 WAVE N / 波清空 WAVE N CLEARED（缩放弹出停 2s 淡出，DOTween 序列存 `_bannerSeq` 字段、触发前 Kill）；波间 Intermission 显示「下一波 Xs」每秒刷新（大字让位后出现）；订阅 OnWaveStarted/OnWaveCleared（OnEnable/OnDisable 配对）
+
+**修改脚本**：
+- `GameManager.cs`：+`TriggerVictory()`（§4.1 接口）——State=Victory + 禁操控 + 解锁鼠标（不置 timeScale=0）→ 延迟 victoryDelay(1.0s) 广播 RaiseGameVictory 弹结算；HandlePlayerDeath 更名公开为 `TriggerGameOver()`（§6.4 接口名，订阅入口不变）
+- `EnemyWaveGenerator.cs`：末波清空改调 `GameManager.Instance.TriggerVictory()`（无 Instance 时兜底直接广播），不再立即 RaiseGameVictory——保证「延迟 1.0s 弹结算」语义且面板不提前显示
+
+**新增资产/场景**：WaveConfig.asset 波次表填满 5 波（8/8/10/12/14，§3 表）；出生点补至 **10 个**（新增 4 个全部 SamplePosition 命中 NavMesh）；Canvas 新增 `WaveBannerText` + WaveBannerController 挂 Canvas（bannerText/waveGenerator 已接线）；场景已保存
+
+**Play 验证**（加速法：内存临时改波次表为 2 波×1 侦察，见新坑 82）：
+
+| 项 | 结果 |
+|----|------|
+| 横幅 | WAVE 1 / WAVE 2 弹出并按时淡出 ✅ |
+| 波间倒计时 | Intermission 期间显示（被击杀间隔截断未截图，机制经 PhaseName/CountdownRemaining 轮询验证）✅ |
+| 胜利链路 | 末波清空 → State=Victory + 8 组件禁用 + 鼠标解锁 → 1s 后 VICTORY 绿标题面板（波次 2/2、时间正确）✅ |
+| 暂停面板 | Victory 态不出现 ✅ |
+| 控制台 | 0 错误 0 警告 ✅ |
+
+**已知坑（追加）**
+
+82. **Play 模式下用 SerializedObject 修改 SO 资产会持久化落盘**（ApplyModifiedPropertiesWithoutUndo + 退出 Play 时的资产序列化即写盘，无需 SetDirty/SaveAssets）——「内存临时改数据加速测试」对 SO 资产不成立；测试后必须显式还原 + SaveAssets 并复核磁盘值。本次胜利链路测试把 WaveConfig 临时改成 2 波×1，测后已按 §3 表还原并逐波复核（8/8/10/12/14）
+
+### S6：击杀 HUD + GrenadePickup + 每波补雷（完成）
+
+> 编译 0 错误 0 警告 | Play 全链路验证通过 | 截图：S6_kill_hud.png
+
+**修改脚本**：
+- `GameManager.cs`：订阅 OnEnemyKilled（OnEnable/OnDisable 配对）→ KillCount++ → 广播 RaiseKillCountChanged
+- `UIManager.cs`：+killText 字段 + UpdateKillDisplay，订阅 OnKillCountChanged（OnEnable/OnDisable 配对 + Start 主动拉初始值，4E 手雷计数同模式）
+
+**新增脚本**：`Assets/Scripts/Combat/GrenadePickup.cs`——复制 HealthPickup 模式：Trigger + Player tag 过滤 → AddGrenades(1)（上限 3 钳制在 GrenadeThrower，核查已有无需改）→ RaisePickupTaken（4B 预留）→ Destroy 自身；Awake 自动补 Trigger Collider
+
+**新增资产/场景**：`Assets/Prefabs/GrenadePickup.prefab`（包内 SM_Wep_Grenade_01 + SphereCollider r=2 trigger）；Pickups 组摆 3 处（Dock -45.5,18.3 / Village 1,28.8 / South 20,-40.2，全部 NavMesh 命中）；Canvas 右上角 `KillText`（与血条左上/弹药手雷右下无冲突）+ UIManager.killText 已接线；每波补雷（restockGrenadePerWave=true）S4 起已接线；场景已保存
+
+**Play 验证**：
+
+| 项 | 结果 |
+|----|------|
+| 击杀 HUD | 击杀测试敌兵 → KillCount 0→1、右上角 HUD 实时显示「击杀: 1」✅ |
+| 拾取 +1 | 手雷 1 → 传送到拾取物 → 计数 +1、拾取物销毁 ✅ |
+| 上限钳制 | 满仓 3 捡拾取物 → 保持 3、拾取物正常消耗 ✅ |
+| 每波补雷 | 波次开始自动 AddGrenades(1)（测试中 1→2 被观测到）✅ |
+| 控制台 | 0 错误 0 警告 ✅ |
+
+---
+
+## 阶段 5 收尾状态
+
+> S1~S6 全部完成（2026-10-01）| 编译 0 错误 0 警告 | 各步 Play 自测通过
+> **explore 独立审查（2026-10-01，只读子 Agent）：通过**——10 项全过（坑67 huntPlayer 直赋安全/存活判定 List+IsDead/GameEvents 只增不改+订阅配对/Find 零新增/敌人不入池/死亡胜利流程守卫/DOTween 序列管理/只增不改 git diff 核对/逻辑缺陷扫描/场景资产一致性含 WaveConfig 磁盘 5 波复核）；无 P0/P1；2 条 P2 建议留阶段6：① SpawnNext 对缺 EnemyBase 组件的预制体无兜底（当前预制体均含）② WaveBanner 倒计时 0.1s 淡入 tween 未跟踪 Kill（影响可忽略）
+> **待办**：用户 Play 终验（§8 清单：5 波全流程/击杀 HUD/死亡与胜利结算/回归项）→ 确认后 git 提交。
+
+### 阶段 5 补充：来袭倒计时 UI（2026-10-01 用户反馈）
+
+> 编译 0 错误 0 警告 | Play 验证通过 | 截图：S5b_countdown_ui.png
+
+- **问题**：开场到 Wave 1 显示前（Preparing 10s）没有任何倒计时 UI；原 WaveBanner 只在波间（Intermission）显示纯文字「下一波 Xs」且无动画
+- **修改**：`WaveBannerController.cs` 重写倒计时逻辑——Preparing 与 Intermission 统一显示「第 N 波来袭 Xs」（同一中央上方位置），**DOTween 弹入（OutBack 缩放+淡入）+ 每秒 DOPunchScale 跳动**；倒计时结束/波开始时快速淡出，WAVE N 横幅照常弹出接管
+- **tween 纪律**（4D 教训落实）：_bannerSeq/_countdownSeq/_pulseTween/_fadeOutTween 全部存字段引用，触发前 Kill 旧 tween；OnDisable 统一 KillAllTweens；横幅激活期间倒计时让位，横幅弹出时倒计时 tween 全部让位且 alpha 置 1 防残留半透明
+- **波号显示**：Preparing 期间=首波号（CurrentWaveNumber），Intermission=当前波+1
+- **验证**：Preparing 显示「第 1 波来袭 7s」（scale 1.02 脉冲中）→ 开波后倒计时消失、WAVE 1 横幅正常弹出淡出 → Fighting 无残留；控制台 0 错 0 警
 
 ---
 

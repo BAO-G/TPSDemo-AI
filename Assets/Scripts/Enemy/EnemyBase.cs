@@ -29,6 +29,9 @@ public class EnemyBase : MonoBehaviour
     [Header("部位(4C新增)")]
     public float headshotMultiplier = 2f;          // 爆头伤害倍率（FirearmWeapon 读取）
 
+    [Header("波次模式(阶段5新增)")]
+    public bool huntPlayer;                        // 寻敌模式：无视 detectRange，attackRange 外直奔玩家（波次生成器刷出的敌人置 true；无 Start 重置逻辑，实例化后直赋安全，坑 67）
+
     private float _currentHealth;
     private NavMeshAgent _navAgent;
     private Transform _playerTransform;
@@ -37,6 +40,9 @@ public class EnemyBase : MonoBehaviour
     private float _lastAttackTime;
     private bool _isDead;
     private Animator _animator; // 动画驱动器（可为空，阶段3接入）
+
+    /// <summary>是否已死亡（波次生成器存活判定用——尸体延迟销毁期间 activeInHierarchy 仍为 true，不可用）</summary>
+    public bool IsDead => _isDead;
 
     private void Start()
     {
@@ -101,6 +107,11 @@ public class EnemyBase : MonoBehaviour
         if (distance <= attackRange)
         {
             AttackPlayer();
+        }
+        else if (huntPlayer)
+        {
+            // 波次寻敌模式：无视 detectRange 直奔玩家（出生点在 20m 外不站桩）
+            ChasePlayer();
         }
         else if (distance <= detectRange)
         {

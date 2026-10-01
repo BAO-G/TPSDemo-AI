@@ -13,6 +13,7 @@ public class UIManager : MonoBehaviour
     public Text ammoText;
     public Text medkitText;             // 医疗包数量文字
     public Text grenadeText;            // 手雷数量文字（4E）
+    public Text killText;               // 击杀数文字（阶段5，右上角）
     public Image redVignetteImage;      // 径向渐变受伤晕影
 
     [Header("受伤反馈参数")]
@@ -77,6 +78,10 @@ public class UIManager : MonoBehaviour
         if (thrower != null)
             UpdateGrenadeDisplay(thrower.GrenadeCount);
 
+        // 初始化击杀显示（Start 主动拉取，防错过初始广播——4E 手雷计数同模式）
+        if (GameManager.Instance != null)
+            UpdateKillDisplay(GameManager.Instance.KillCount);
+
         StartCoroutine(SyncAmmoAfterWeaponReady());
     }
 
@@ -97,11 +102,14 @@ public class UIManager : MonoBehaviour
     {
         // 手雷数量走全局事件总线（GrenadeThrower 广播）
         GameEvents.OnGrenadeCountChanged += UpdateGrenadeDisplay;
+        // 击杀数走全局事件总线（阶段5：GameManager 累加后广播）
+        GameEvents.OnKillCountChanged += UpdateKillDisplay;
     }
 
     private void OnDisable()
     {
         GameEvents.OnGrenadeCountChanged -= UpdateGrenadeDisplay;
+        GameEvents.OnKillCountChanged -= UpdateKillDisplay;
     }
 
     private void OnDestroy()
@@ -196,5 +204,12 @@ public class UIManager : MonoBehaviour
     {
         if (grenadeText != null)
             grenadeText.text = $"手雷: {count}";
+    }
+
+    // ===== 击杀显示（阶段5） =====
+    private void UpdateKillDisplay(int count)
+    {
+        if (killText != null)
+            killText.text = $"击杀: {count}";
     }
 }
