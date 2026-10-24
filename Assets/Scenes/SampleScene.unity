@@ -484,6 +484,7 @@ MonoBehaviour:
   waveGenerator: {fileID: 1154877447}
   bannerDuration: 2
   popScale: 0.6
+  tickPunch: 0.12
 --- !u!1 &136235074
 GameObject:
   m_ObjectHideFlags: 0
@@ -8197,6 +8198,7 @@ GameObject:
   - component: {fileID: 1727287021}
   - component: {fileID: 1727287025}
   - component: {fileID: 1727287024}
+  - component: {fileID: 1727287026}
   m_Layer: 0
   m_Name: TPSCamera
   m_TagString: Untagged
@@ -8318,6 +8320,45 @@ MonoBehaviour:
   AmplitudeGain: 0
   FrequencyGain: 1
   m_NoiseOffsets: {x: 0, y: 0, z: 0}
+--- !u!114 &1727287026
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1727287020}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbe43d662878a7c43bcd44d43c9e2094, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  CollideAgainst:
+    serializedVersion: 2
+    m_Bits: 1
+  IgnoreTag: Player
+  TransparentLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  MinimumDistanceFromTarget: 0.5
+  AvoidObstacles:
+    Enabled: 1
+    DistanceLimit: 0
+    MinimumOcclusionTime: 0
+    CameraRadius: 0.25
+    UseFollowTarget:
+      Enabled: 0
+      YOffset: 0
+    Strategy: 0
+    MaximumEffort: 4
+    SmoothingTime: 0
+    Damping: 0.5
+    DampingWhenOccluded: 0
+  ShotQualityEvaluation:
+    Enabled: 0
+    OptimalDistance: 10
+    NearLimit: 5
+    FarLimit: 30
+    MaxQualityBoost: 0.2
 --- !u!1 &1730161358
 GameObject:
   m_ObjectHideFlags: 0

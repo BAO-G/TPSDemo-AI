@@ -110,3 +110,9 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 Assets/Screenshots.meta
+
+# ===== AI Agent 相关文件（不上传）=====
+# WorkBuddy 工作目录：含 Agent 记忆（.workbuddy/memory）、会话数据、本地设置
+/.workbuddy/
+# ZCode 客户端的忽略规则文件
+/.zcodeignore

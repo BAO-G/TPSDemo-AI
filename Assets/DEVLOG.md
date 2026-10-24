@@ -1265,6 +1265,27 @@ CameraTarget：PlayerController 只写 localRotation（俯仰视角），
 
 ---
 
+## 相机避障记录（2026-10-01 用户反馈：镜头穿墙）
+
+> 编译 0 错误 0 警告 | 场景已保存 | 无脚本改动，纯场景组件配置
+
+**改动**：TPSCamera 新增 `CinemachineDeoccluder`（CM3 组件，Unity.Cinemachine 命名空间），参数：
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| CollideAgainst | Default 层 | 建筑/地形碰撞都在 Default |
+| IgnoreTag | Player | 忽略玩家自身胶囊防误拉近 |
+| AvoidObstacles.Enabled / Strategy | true / PullCameraForward | 遮挡时沿视线拉近，保持构图 |
+| CameraRadius | 0.25 | 相机体半径，防镜头边缘穿墙 |
+| DampingWhenOccluded / Damping | 0 / 0.5 | 被挡瞬间拉近（商业手感），脱离后 0.5s 平滑退回 |
+| MinimumDistanceFromTarget | 0.5 | 离角色最近不低于 0.5m |
+
+**Play 验证**：玩家背贴 SM_Bld_House_01 东墙 → 相机 5m→2.17m 停在墙前约 0.5m 不穿透 ✅；传送回开阔地 → 恢复 5.39m（与改造前基准一致）✅。
+
+**注意**：`GetCameraDisplacementDistance` 反射调用需传参（CodeDom 崩），验证遮挡直接读「主相机到玩家距离 + 中间射线」即可。CameraDistance 仍为 5（越肩拉近调整用户未应用，待定）。
+
+---
+
 ## 下一阶段
 
 > **规划基准已迁移至 [DEVELOPMENT_PLAN.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVELOPMENT_PLAN.md)（2026-09-06 创建）**——后续开发以该文档为准，包含完整差距分析、已确认决策（D1 Raycast弹道 / D2 轻量静态事件 / D3 波次生存模式 / D4 任务包顺序）、接口定义、进度计划与测试策略。
