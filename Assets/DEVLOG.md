@@ -1286,6 +1286,34 @@ CameraTarget：PlayerController 只写 localRotation（俯仰视角），
 
 ---
 
+## 阶段 6 开工 + S1 状态机重构记录（2026-10-25）
+
+> 方案基准：[PHASE6_PLAN.md](PHASE6_PLAN.md)（用户已确认：D8 波次敌人接入感知 / D9 状态机重构 / 4B 继续挂起 / D12 掩体切角降为可选）
+> 编译 0 错误 0 警告 | Play 回归通过 | 无场景改动（纯脚本）
+
+### S1 变更内容（行为等价迁移，不加新功能）
+
+| 文件 | 内容 |
+|------|------|
+| `EnemyBase.cs` | **状态机重构**（D9）：enum `EnemyState { Patrol, Hunt, Chase, Attack, Dead }` + switch 主循环，状态切换同帧执行新行为（帧级等价旧 if-else）；**删除 `huntPlayer` 字段**（D8 语义迁移），新增 `SetInitialHuntTarget(Vector3)`（运行时字段无 Start 重置，坑 67 约束保持）+ `State` 只读属性（调试观测）；Patrol/Hunt/Chase/Attack/Die 方法体原样保留 |
+| `EnemyWaveGenerator.cs` | `huntPlayer=true` → `SetInitialHuntTarget(玩家出生时刻位置)`（S1 过渡语义下行为等价）；**P2① 修复**：SpawnNext 对缺 EnemyBase 的预制体 LogError 指名并跳过（原先静默吞掉） |
+| `WaveBannerController.cs` | **P2② 复核未复现**：四个 tween（_bannerSeq/_countdownSeq/_pulseTween/_fadeOutTween）当前代码全部已存字段引用并在触发前 Kill——explore 所述「0.1s 淡入未纳管」在现版本不存在（淡入 0.2s 且在 _countdownSeq 序列内），判定为基于旧版本结论，不做改动 |
+
+### Play 回归验证（execute_code，坑 81 反射访问新类型）
+
+| 回归项 | 结果 |
+|--------|------|
+| 散装守卫巡逻 | Play 中临时启用 Enemies 组 → 8/8 状态 Patrol（玩家在远处）✅ |
+| 波次围攻链 | Wave1 刷出 8 敌 → 6 个 Hunt→追至玩家身边转 Attack、2 个重装（慢速）保持 Hunt 路上 ✅ |
+| 攻击输出 | 玩家被围攻至血量 0（真实弹道伤害生效，意外完成死亡结算链路二次验证）✅ |
+| 死亡链 | TakeDamage(9999) → 返回 true、State=Dead、IsDead=true ✅ |
+| huntPlayer 残留 | 全局 grep 仅剩 DEVLOG 历史文档记载（代码零残留）；场景 YAML 旧序列化值由 Unity 下次保存自动清理 ✅ |
+| 控制台 | 0 错误 0 警告 ✅ |
+
+**注意**：`GameObject.Find` 找不到停用的 Enemies 组（坑 68 复现）——Play 验证停用分组用 `SceneManager.GetActiveScene().GetRootGameObjects()` 遍历。
+
+---
+
 ## 下一阶段
 
 > **规划基准已迁移至 [DEVELOPMENT_PLAN.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVELOPMENT_PLAN.md)（2026-09-06 创建）**——后续开发以该文档为准，包含完整差距分析、已确认决策（D1 Raycast弹道 / D2 轻量静态事件 / D3 波次生存模式 / D4 任务包顺序）、接口定义、进度计划与测试策略。

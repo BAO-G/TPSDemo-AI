@@ -2,11 +2,20 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// 敌人基类：管理血量、NavMesh 移动、简单巡逻与追击攻击
+/// 敌人基类（阶段6 S1 状态机重构）：血量、NavMesh 移动、状态机驱动的巡逻/追击/攻击
+/// 行为等价迁移自 if-else 距离驱动版本（PHASE6_PLAN §2.1 迁移对照表），本步不加新行为：
+///   Patrol  巡逻路点/原地待命（散装守卫用，场景已停用保留兼容）
+///   Hunt    波次寻敌（S1 过渡语义：直追玩家实时位置，等价旧 huntPlayer；S3 感知接入后改为冲向注入点）
+///   Chase   追击玩家（检测范围内）
+///   Attack  站桩转向 + Raycast 弹道（决策 D1）
+///   Dead    死亡静置期（尸体 corpseDuration 后销毁）
 /// 挂载时需同时添加 NavMeshAgent 组件，场景需有烘焙的 NavMesh
 /// </summary>
 public class EnemyBase : MonoBehaviour
 {
+    /// <summary>敌人状态（阶段6 轻量状态机，D9）</summary>
+    public enum EnemyState { Patrol, Hunt, Chase, Attack, Dead }
+
     [Header("血量参数")]
     public float maxHealth = 100f;
 
@@ -29,9 +38,6 @@ public class EnemyBase : MonoBehaviour
     [Header("部位(4C新增)")]
     public float headshotMultiplier = 2f;          // 爆头伤害倍率（FirearmWeapon 读取）
 
-    [Header("波次模式(阶段5新增)")]
-    public bool huntPlayer;                        // 寻敌模式：无视 detectRange，attackRange 外直奔玩家（波次生成器刷出的敌人置 true；无 Start 重置逻辑，实例化后直赋安全，坑 67）
-
     private float _currentHealth;
     private NavMeshAgent _navAgent;
     private Transform _playerTransform;
@@ -41,8 +47,28 @@ public class EnemyBase : MonoBehaviour
     private bool _isDead;
     private Animator _animator; // 动画驱动器（可为空，阶段3接入）
 
+    // ===== 阶段6 状态机（D8/D9）=====
+    // 初始目标为纯运行时字段且无 Start 重置（坑 67：生成器 Instantiate 后同帧直赋，Start 重置会覆盖）
+    private EnemyState _state = EnemyState.Patrol;
+    private Vector3 _initialHuntTarget;
+    private bool _hasInitialTarget;
+
+    /// <summary>当前状态（调试/测试观测用）</summary>
+    public EnemyState State => _state;
     /// <summary>是否已死亡（波次生成器存活判定用——尸体延迟销毁期间 activeInHierarchy 仍为 true，不可用）</summary>
     public bool IsDead => _isDead;
+
+    /// <summary>
+    /// 波次生成器注入初始追击目标（阶段6 D8，替代已删除的 huntPlayer 字段）：
+    /// 实例化后同帧直赋安全；S1 过渡语义下 Hunt 仍直追玩家实时位置（行为等价），S3 起改为冲向注入点后由感知接管
+    /// </summary>
+    public void SetInitialHuntTarget(Vector3 pos)
+    {
+        _initialHuntTarget = pos;
+        _hasInitialTarget = true;
+        if (!_isDead)
+            _state = EnemyState.Hunt;
+    }
 
     private void Start()
     {
@@ -96,31 +122,104 @@ public class EnemyBase : MonoBehaviour
             return;
         }
 
-        // 未找到玩家（未设置 Tag）时保持巡逻
+        // 未找到玩家（未设置 Tag）时保持巡逻（与旧版一致）
         if (_playerTransform == null)
         {
+            _state = EnemyState.Patrol;
             Patrol();
             return;
         }
 
         float distance = Vector3.Distance(transform.position, _playerTransform.position);
-        if (distance <= attackRange)
+
+        // 状态机主循环（等价旧 if-else 距离分流；状态切换的同帧即执行新状态行为，保持帧级一致）
+        switch (_state)
         {
-            AttackPlayer();
+            case EnemyState.Patrol:
+                if (distance <= attackRange)
+                {
+                    SetState(EnemyState.Attack);
+                    AttackPlayer();
+                }
+                else if (_hasInitialTarget)
+                {
+                    // 波次敌人不回巡逻（等价旧 huntPlayer 分支优先级）
+                    SetState(EnemyState.Hunt);
+                    ChasePlayer();
+                }
+                else if (distance <= detectRange)
+                {
+                    SetState(EnemyState.Chase);
+                    ChasePlayer();
+                }
+                else
+                {
+                    Patrol();
+                }
+                break;
+
+            case EnemyState.Hunt:
+                if (distance <= attackRange)
+                {
+                    SetState(EnemyState.Attack);
+                    AttackPlayer();
+                }
+                else
+                {
+                    // S1 过渡语义：直追玩家实时位置（等价旧 huntPlayer）；S3 改冲 _initialHuntTarget
+                    ChasePlayer();
+                }
+                break;
+
+            case EnemyState.Chase:
+                if (distance <= attackRange)
+                {
+                    SetState(EnemyState.Attack);
+                    AttackPlayer();
+                }
+                else if (distance <= detectRange)
+                {
+                    ChasePlayer();
+                }
+                else
+                {
+                    SetState(EnemyState.Patrol);
+                    Patrol();
+                }
+                break;
+
+            case EnemyState.Attack:
+                if (distance > attackRange)
+                {
+                    if (_hasInitialTarget)
+                    {
+                        SetState(EnemyState.Hunt);
+                        ChasePlayer();
+                    }
+                    else if (distance <= detectRange)
+                    {
+                        SetState(EnemyState.Chase);
+                        ChasePlayer();
+                    }
+                    else
+                    {
+                        SetState(EnemyState.Patrol);
+                        Patrol();
+                    }
+                }
+                else
+                {
+                    AttackPlayer();
+                }
+                break;
         }
-        else if (huntPlayer)
-        {
-            // 波次寻敌模式：无视 detectRange 直奔玩家（出生点在 20m 外不站桩）
-            ChasePlayer();
-        }
-        else if (distance <= detectRange)
-        {
-            ChasePlayer();
-        }
-        else
-        {
-            Patrol();
-        }
+    }
+
+    private void SetState(EnemyState next)
+    {
+        if (_state == next)
+            return;
+        _state = next;
     }
 
     /// <summary>用实际移动速度驱动动画 Blend Tree（Speed 参数）</summary>
@@ -296,6 +395,7 @@ public class EnemyBase : MonoBehaviour
         }
 
         _isDead = true;
+        SetState(EnemyState.Dead);
 
         // 广播敌人死亡事件（波次生成/击杀统计订阅）
         GameEvents.RaiseEnemyKilled(transform.position);

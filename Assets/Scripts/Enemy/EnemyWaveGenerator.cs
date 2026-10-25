@@ -120,7 +120,7 @@ public class EnemyWaveGenerator : MonoBehaviour
         _phase = WavePhase.Spawning;
     }
 
-    /// <summary>从队列刷一个敌人：选出生点 → NavMesh 微调 → 直出并置 huntPlayer 寻敌模式</summary>
+    /// <summary>从队列刷一个敌人：选出生点 → NavMesh 微调 → 直出并注入初始追击目标（阶段6 D8）</summary>
     private void SpawnNext()
     {
         var prefab = _spawnQueue[0];
@@ -134,9 +134,17 @@ public class EnemyWaveGenerator : MonoBehaviour
         var enemy = go.GetComponent<EnemyBase>();
         if (enemy != null)
         {
-            // 坑 67：huntPlayer 是无 Start 重置的新字段，Instantiate 后直赋安全
-            enemy.huntPlayer = true;
+            // 坑 67：初始目标是无 Start 重置的运行时字段，Instantiate 后直赋安全
+            // D8：注入玩家出生时刻位置为 Hunt 目标（S1 过渡语义下行为等价旧 huntPlayer）
+            enemy.SetInitialHuntTarget(grenadeThrower != null
+                ? grenadeThrower.transform.position
+                : transform.position);
             _aliveEnemies.Add(enemy);
+        }
+        else
+        {
+            // P2①（explore 审查）：预制体缺 EnemyBase 时明确报错并跳过，不再静默吞掉
+            Debug.LogError($"[EnemyWaveGenerator] 预制体 {prefab.name} 缺少 EnemyBase 组件，该条目已跳过", prefab);
         }
     }
 
