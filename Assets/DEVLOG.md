@@ -1482,6 +1482,43 @@ CameraTarget：PlayerController 只写 localRotation（俯仰视角），
 
 ---
 
+## 阶段 6 S6 性能收官记录（2026-10-26）
+
+> 编译 0 错误 0 警告 | 池化修复验证通过 | 性能基线已建档
+
+### S6 变更内容（PHASE6_PLAN §2.8）
+
+| 文件 | 内容 |
+|------|------|
+| `PoolParticleRelease.cs` **新建** | 粒子播完自动回池组件：`OnParticleSystemStopped` → `ObjectPool.Release`（Unity 官方池化回调流） |
+| `CombatEffectsController.cs` | **修复池泄漏**：旧实现 stopAction=Disable 仅就地停用、从未 Release 回队列，池退化为"每次新建+孤儿堆积"；改为根粒子 Callback + PoolParticleRelease 回池，子系统保持 Disable |
+| `FirearmWeapon.cs` | **枪口火焰池化**：旧实现每次射击 Instantiate+Destroy（600RPM≈10 次/秒分配）；改为 ObjectPool.Get + Callback 回池 + Start 预热 4；删除 `_muzzleFlash` 字段 |
+
+### 对象池审计结论（全量扫描 Instantiate/Destroy）
+
+| 调用点 | 结论 |
+|--------|------|
+| 曳光/手雷/血特效/烟尘/爆炸/枪口火焰 | 全部走池 ✅（血/烟/爆炸的池泄漏本次修复） |
+| 武器模型实例化（WeaponManager/FirearmWeapon.Start） | 一次性装备行为，不池化（合理） |
+| 波次敌人生成 | Instantiate 直出（D4 设计：尸体 10s 延迟销毁使池化不值） |
+| 拾取物/尸体销毁 | 一次性生命周期 Destroy（合理） |
+
+### 性能基线（编辑器 Play，Wave 交战中采集，FrameTimingManager）
+
+| 指标 | 数值 |
+|------|------|
+| CPU 帧耗时 | 8.46ms（≈118 FPS，目标 ≥60 达成） |
+| GPU 帧耗时 | 4.44ms |
+| 主线程/渲染线程 | 3.34ms / 2.03ms |
+| 可见蒙皮网格 | 5 |
+| Draw Call | 此 API 读取为 0（计数器需编辑器 Stats 窗口激活，暂不可用——后续优化时用 Profiler/Stats 窗人工读取） |
+
+**渲染配置档案**：URP-HighFidelity（MSAA×4、主光 4096 阴影、每像素附加光）——后续如需提帧先降此档。
+
+**UI 美化说明**：按方案"克制"原则本步未动 HUD 布局——具体样式需用户意向（描边/底板/配色），待用户提出后单独小包处理。
+
+---
+
 ## 下一阶段
 
 > **规划基准已迁移至 [DEVELOPMENT_PLAN.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVELOPMENT_PLAN.md)（2026-09-06 创建）**——后续开发以该文档为准，包含完整差距分析、已确认决策（D1 Raycast弹道 / D2 轻量静态事件 / D3 波次生存模式 / D4 任务包顺序）、接口定义、进度计划与测试策略。

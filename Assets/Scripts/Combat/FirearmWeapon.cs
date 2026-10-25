@@ -15,7 +15,6 @@ public class FirearmWeapon : MonoBehaviour
     private int _reserveAmmo;                       // 备弹池弹药
     private bool _isReloading;
     private float _nextFireTime;
-    private GameObject _muzzleFlash;
     private PlayerController _playerController;
     private PlayerADSController _adsController;
     private Animator _playerAnimator; // 玩家角色动画（阶段3接入，驱动射击/换弹动作）
@@ -53,6 +52,10 @@ public class FirearmWeapon : MonoBehaviour
         {
             Instantiate(weaponData.weaponPrefab, transform);
         }
+
+        // S6：枪口火焰入池预热（旧实现每次射击 Instantiate+Destroy，600RPM≈10 次/秒分配）
+        if (weaponData.muzzleFlashPrefab != null)
+            ObjectPool.Prewarm(weaponData.muzzleFlashPrefab, 4);
     }
 
     /// <summary>尝试射击：有弹药、冷却结束、未在换弹</summary>
@@ -178,12 +181,30 @@ public class FirearmWeapon : MonoBehaviour
 
     public int GetMaxAmmo() => weaponData != null ? weaponData.magazineSize : 0;
 
+    /// <summary>枪口火焰（S6 池化）：从对象池取出播放，播完 Callback 自动回池；旧实现每次射击 Instantiate+Destroy</summary>
     private void PlayMuzzleFlash()
     {
         if (weaponData.muzzleFlashPrefab == null) return;
         Transform origin = firePoint != null ? firePoint : transform;
-        if (_muzzleFlash != null) Destroy(_muzzleFlash);
-        _muzzleFlash = Instantiate(weaponData.muzzleFlashPrefab, origin.position, origin.rotation);
-        Destroy(_muzzleFlash, 1f);
+        var flash = ObjectPool.Get(weaponData.muzzleFlashPrefab, origin.position, origin.rotation);
+        if (flash == null) return;
+
+        // 根粒子停止时回调回池（与 CombatEffectsController 同机制，CombatEffects 不管理枪口火焰故在此配置）
+        var systems = flash.GetComponentsInChildren<ParticleSystem>(true);
+        foreach (var ps in systems)
+        {
+            var main = ps.main;
+            if (main.stopAction == ParticleSystemStopAction.Destroy || main.stopAction == ParticleSystemStopAction.Disable)
+                main.stopAction = ParticleSystemStopAction.Disable;
+        }
+        if (systems.Length > 0)
+        {
+            var main = systems[0].main;
+            main.stopAction = ParticleSystemStopAction.Callback;
+            var watcher = systems[0].GetComponent<PoolParticleRelease>();
+            if (watcher == null)
+                watcher = systems[0].gameObject.AddComponent<PoolParticleRelease>();
+            watcher.rootToRelease = flash;
+        }
     }
 }

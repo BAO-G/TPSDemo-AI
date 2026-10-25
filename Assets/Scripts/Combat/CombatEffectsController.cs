@@ -122,15 +122,27 @@ public class CombatEffectsController : MonoBehaviour
         go.SetActive(true);
     }
 
-    /// <summary>包内 FX 预制体默认播完 Destroy（破坏池化）；统一改为 Disable 停止后自动隐藏回池</summary>
+    /// <summary>包内 FX 预制体默认播完 Destroy（破坏池化）；根粒子 stopAction 改 Callback + 挂自动回池组件（S6：修复 Disable 就地停用从未 Release 的池泄漏）</summary>
     private void ConfigurePooledParticles(GameObject go)
     {
         var systems = go.GetComponentsInChildren<ParticleSystem>(true);
         foreach (var ps in systems)
         {
             var main = ps.main;
-            if (main.stopAction == ParticleSystemStopAction.Destroy)
-                main.stopAction = ParticleSystemStopAction.Disable;
+            if (main.stopAction == ParticleSystemStopAction.Destroy || main.stopAction == ParticleSystemStopAction.Disable)
+                main.stopAction = ParticleSystemStopAction.Disable;   // 子系统停止仅停用自身
+        }
+
+        // 根粒子（第一个找到的）：停止时回调回池
+        var rootPs = systems.Length > 0 ? systems[0] : null;
+        if (rootPs != null)
+        {
+            var main = rootPs.main;
+            main.stopAction = ParticleSystemStopAction.Callback;
+            var watcher = rootPs.GetComponent<PoolParticleRelease>();
+            if (watcher == null)
+                watcher = rootPs.gameObject.AddComponent<PoolParticleRelease>();
+            watcher.rootToRelease = go;
         }
     }
 
