@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5189558598883639002}
   - component: {fileID: 2364470812983470225}
   - component: {fileID: 3021318094783722885}
+  - component: {fileID: 1732209730336055544}
   m_Layer: 0
   m_Name: Enemy_Heavy
   m_TagString: Untagged
@@ -107,6 +108,21 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
+--- !u!114 &1732209730336055544
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5124993546087282107}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b2736fb0e2ad0b48be26e0d9c420804, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sightRange: 18
+  fovAngle: 70
+  perceptionTick: 0.2
 --- !u!1001 &8844853799528223733
 PrefabInstance:
   m_ObjectHideFlags: 0

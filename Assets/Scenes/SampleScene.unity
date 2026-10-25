@@ -190,7 +190,9 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
-  huntPlayer: 0
+  searchDuration: 3
+  searchTurnSpeed: 90
+  reHuntOnSearchTimeout: 1
 --- !u!195 &29107587
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -847,7 +849,9 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
-  huntPlayer: 0
+  searchDuration: 3
+  searchTurnSpeed: 90
+  reHuntOnSearchTimeout: 1
 --- !u!195 &177397918
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -2560,7 +2564,9 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
-  huntPlayer: 0
+  searchDuration: 3
+  searchTurnSpeed: 90
+  reHuntOnSearchTimeout: 1
 --- !u!195 &441088430
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -2668,7 +2674,9 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
-  huntPlayer: 0
+  searchDuration: 3
+  searchTurnSpeed: 90
+  reHuntOnSearchTimeout: 1
 --- !u!195 &445460839
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -3824,7 +3832,9 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
-  huntPlayer: 0
+  searchDuration: 3
+  searchTurnSpeed: 90
+  reHuntOnSearchTimeout: 1
 --- !u!195 &782875887
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -4658,7 +4668,9 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
-  huntPlayer: 0
+  searchDuration: 3
+  searchTurnSpeed: 90
+  reHuntOnSearchTimeout: 1
 --- !u!195 &925339743
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -8488,7 +8500,9 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
-  huntPlayer: 0
+  searchDuration: 3
+  searchTurnSpeed: 90
+  reHuntOnSearchTimeout: 1
 --- !u!195 &1765766140
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -9997,7 +10011,9 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
-  huntPlayer: 0
+  searchDuration: 3
+  searchTurnSpeed: 90
+  reHuntOnSearchTimeout: 1
 --- !u!195 &2059067210
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -10446,6 +10462,10 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 1904380088646673904}
+    - targetCorrespondingSourceObject: {fileID: 8302728729188045123, guid: 0dd7c5eab266670458ff98d112733dc7,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1904380088646673909}
     - targetCorrespondingSourceObject: {fileID: 7759351457301237141, guid: 0dd7c5eab266670458ff98d112733dc7,
         type: 3}
       insertIndex: -1
@@ -10537,6 +10557,24 @@ MonoBehaviour:
   spinSpeed: 12
   aimCamera: {fileID: 1727287023}
   _inputHandler: {fileID: 2022725655}
+--- !u!114 &1904380088646673909
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2022725656}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ceacb52a51f3ec4dace9bd77396c98b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  walkNoise: 5
+  sprintNoise: 7
+  crouchNoise: 3
+  gunshotNoise: 30
+  explosionNoise: 30
+  transientDecayTime: 0.5
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

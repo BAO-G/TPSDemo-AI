@@ -2,19 +2,20 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// 敌人基类（阶段6 S1 状态机重构）：血量、NavMesh 移动、状态机驱动的巡逻/追击/攻击
-/// 行为等价迁移自 if-else 距离驱动版本（PHASE6_PLAN §2.1 迁移对照表），本步不加新行为：
-///   Patrol  巡逻路点/原地待命（散装守卫用，场景已停用保留兼容）
-///   Hunt    波次寻敌（S1 过渡语义：直追玩家实时位置，等价旧 huntPlayer；S3 感知接入后改为冲向注入点）
-///   Chase   追击玩家（检测范围内）
-///   Attack  站桩转向 + Raycast 弹道（决策 D1）
-///   Dead    死亡静置期（尸体 corpseDuration 后销毁）
+/// 敌人基类（阶段6 状态机）：血量、NavMesh 移动、状态机驱动的行为（PHASE6_PLAN §2.1/§2.4）
+///   Patrol  巡逻路点/原地待命（散装守卫用）
+///   Hunt    波次寻敌（D8）：只冲出生时注入的目标点，到达后进 Search；不追踪玩家实时位置
+///   Chase   追击玩家（视觉确认中）
+///   Attack  站桩转向 + Raycast 弹道（决策 D1）；视觉门控（掩体后不开枪）
+///   Search  调查：跑向最后已知位置 → 原地环顾 searchDuration → 期间听见/看见恢复追击；超时守卫回 Patrol、波次敌人兜底重新进发（reHuntOnSearchTimeout）
+///   Dead    死亡静置期
+/// 行为分层（D8）：看见→Chase/Attack；听到（噪音半径内）→Search 调查
 /// 挂载时需同时添加 NavMeshAgent 组件，场景需有烘焙的 NavMesh
 /// </summary>
 public class EnemyBase : MonoBehaviour
 {
     /// <summary>敌人状态（阶段6 轻量状态机，D9）</summary>
-    public enum EnemyState { Patrol, Hunt, Chase, Attack, Dead }
+    public enum EnemyState { Patrol, Hunt, Chase, Attack, Search, Dead }
 
     [Header("血量参数")]
     public float maxHealth = 100f;
@@ -38,6 +39,19 @@ public class EnemyBase : MonoBehaviour
     [Header("部位(4C新增)")]
     public float headshotMultiplier = 2f;          // 爆头伤害倍率（FirearmWeapon 读取）
 
+    [Header("搜索参数(阶段6 S3/S4)")]
+    public float searchDuration = 5f;              // 到达搜索区域后的环顾时长（秒）
+    public float searchTurnSpeed = 90f;            // 环顾转速（度/秒）
+    public bool reHuntOnSearchTimeout = true;      // 波次敌人兜底（D8）：搜索超时后向最后已知情报区域重新进发，防全程隐身卡关
+    public float reHuntMinOffset = 5f;             // reHunt 目标距情报锚点的最小偏移（米）
+    public float reHuntMaxOffset = 10f;            // reHunt 目标距情报锚点的最大偏移（米）
+
+    [Header("寻路范围参数(阶段6 用户反馈：目的地松散化)")]
+    public float huntSpreadMin = 2f;               // 开波进发：注入点周围随机落点最小半径（米）
+    public float huntSpreadMax = 5f;               // 开波进发：注入点周围随机落点最大半径（米）
+    public float searchSpreadMin = 2f;             // 搜索接近：情报点周围随机落点最小半径（米）
+    public float searchSpreadMax = 5f;             // 搜索接近：情报点周围随机落点最大半径（米）
+
     private float _currentHealth;
     private NavMeshAgent _navAgent;
     private Transform _playerTransform;
@@ -50,8 +64,14 @@ public class EnemyBase : MonoBehaviour
     // ===== 阶段6 状态机（D8/D9）=====
     // 初始目标为纯运行时字段且无 Start 重置（坑 67：生成器 Instantiate 后同帧直赋，Start 重置会覆盖）
     private EnemyState _state = EnemyState.Patrol;
-    private Vector3 _initialHuntTarget;
+    private Vector3 _initialHuntTarget;    // Hunt 情报锚点：波次出生时刻的玩家位置（D8；兜底时刷新为最后已知情报位置）
+    private Vector3 _huntDestination;      // Hunt 实际寻路目的地（锚点周围松散落点，用户反馈：不寻路到确切位置）
     private bool _hasInitialTarget;
+    private EnemyPerception _perception;   // 感知组件（S2；prefab 未挂时回退纯距离判定，保持兼容）
+    private bool _searchLooking;           // Search 子阶段：false=跑向搜索区域，true=原地环顾
+    private float _searchTimer;
+    private Vector3 _searchDestination;    // Search 实际寻路目的地（情报点周围松散落点）
+    private Vector3 _searchDestAnchor;     // 搜索目的地对应的情报锚点（情报移动过大时重选落点）
 
     /// <summary>当前状态（调试/测试观测用）</summary>
     public EnemyState State => _state;
@@ -59,12 +79,20 @@ public class EnemyBase : MonoBehaviour
     public bool IsDead => _isDead;
 
     /// <summary>
-    /// 波次生成器注入初始追击目标（阶段6 D8，替代已删除的 huntPlayer 字段）：
-    /// 实例化后同帧直赋安全；S1 过渡语义下 Hunt 仍直追玩家实时位置（行为等价），S3 起改为冲向注入点后由感知接管
+    /// 波次生成器注入 Hunt 情报锚点（阶段6 D8，替代已删除的 huntPlayer 字段）：实例化后同帧直赋安全。
+    /// 语义：敌人进发到锚点周围 huntSpread 环带的松散落点（不寻路到确切位置），到达后进 Search 环顾；
+    /// 搜索超时按 reHuntOnSearchTimeout 向最后已知情报区域重新进发。
     /// </summary>
     public void SetInitialHuntTarget(Vector3 pos)
     {
-        _initialHuntTarget = pos;
+        BeginHunt(pos, huntSpreadMin, huntSpreadMax);
+    }
+
+    /// <summary>开始一段 Hunt：锚点周围随机松散落点为寻路目的地（用户反馈：目的地范围化）</summary>
+    private void BeginHunt(Vector3 anchor, float minR, float maxR)
+    {
+        _initialHuntTarget = anchor;
+        _huntDestination = PickLoosePoint(anchor, minR, maxR);
         _hasInitialTarget = true;
         if (!_isDead)
             _state = EnemyState.Hunt;
@@ -86,6 +114,11 @@ public class EnemyBase : MonoBehaviour
             _playerTransform = player.transform;
             _playerHealth = player.GetComponent<PlayerHealth>();
         }
+
+        // 感知组件（S2/S3）：玩家引用与噪音发射器由代码注入（prefab 不能持场景引用）
+        _perception = GetComponent<EnemyPerception>();
+        if (_perception != null && _playerTransform != null)
+            _perception.Init(_playerTransform, _playerTransform.GetComponent<PlayerNoiseEmitter>());
 
         SetupHeadPart();
     }
@@ -115,6 +148,12 @@ public class EnemyBase : MonoBehaviour
         part.isHead = true;
     }
 
+    /// <summary>是否看见玩家：有感知组件用视觉判定（视锥+视线），未挂时回退旧版纯距离判定保持兼容</summary>
+    private bool SeesPlayer(float distance)
+    {
+        return _perception != null ? _perception.CanSeePlayer : distance <= detectRange;
+    }
+
     private void Update()
     {
         if (_isDead)
@@ -131,26 +170,34 @@ public class EnemyBase : MonoBehaviour
         }
 
         float distance = Vector3.Distance(transform.position, _playerTransform.position);
+        bool sees = SeesPlayer(distance);
+        bool heard = _perception != null && _perception.HeardPlayer;
 
-        // 状态机主循环（等价旧 if-else 距离分流；状态切换的同帧即执行新状态行为，保持帧级一致）
+        // 状态机主循环：行为分层（D8）——看见→Chase/Attack；听到→Search 调查；波次敌人 Hunt 只冲注入点
         switch (_state)
         {
             case EnemyState.Patrol:
-                if (distance <= attackRange)
+                if (distance <= attackRange && sees)
                 {
                     SetState(EnemyState.Attack);
                     AttackPlayer();
                 }
-                else if (_hasInitialTarget)
-                {
-                    // 波次敌人不回巡逻（等价旧 huntPlayer 分支优先级）
-                    SetState(EnemyState.Hunt);
-                    ChasePlayer();
-                }
-                else if (distance <= detectRange)
+                else if (sees)
                 {
                     SetState(EnemyState.Chase);
                     ChasePlayer();
+                }
+                else if (heard)
+                {
+                    // 听到动静：前往声源最后已知位置调查（不直接追击）
+                    EnterSearch();
+                    ChaseToPosition(_perception.LastKnownPlayerPos);
+                }
+                else if (_hasInitialTarget)
+                {
+                    // 波次敌人兜底：绝不滞留巡逻（S3 起为冲注入点语义）
+                    SetState(EnemyState.Hunt);
+                    ChaseToPosition(_initialHuntTarget);
                 }
                 else
                 {
@@ -159,60 +206,169 @@ public class EnemyBase : MonoBehaviour
                 break;
 
             case EnemyState.Hunt:
-                if (distance <= attackRange)
+                if (distance <= attackRange && sees)
                 {
                     SetState(EnemyState.Attack);
                     AttackPlayer();
                 }
+                else if (sees)
+                {
+                    SetState(EnemyState.Chase);
+                    ChasePlayer();
+                }
+                else if (heard)
+                {
+                    // 听到动静：转入搜索（松散接近声源区域）
+                    EnterSearch();
+                }
                 else
                 {
-                    // S1 过渡语义：直追玩家实时位置（等价旧 huntPlayer）；S3 改冲 _initialHuntTarget
-                    ChasePlayer();
+                    // D8：只进发到注入点周围的松散落点（_huntDestination），不追踪玩家实时位置
+                    ChaseToPosition(_huntDestination);
+                    if (!_navAgent.pathPending &&
+                        HorizontalDistance(transform.position, _huntDestination) <= _navAgent.stoppingDistance + 1.5f)
+                        EnterSearch();
                 }
                 break;
 
             case EnemyState.Chase:
-                if (distance <= attackRange)
+                if (distance <= attackRange && sees)
                 {
                     SetState(EnemyState.Attack);
                     AttackPlayer();
                 }
-                else if (distance <= detectRange)
+                else if (sees)
                 {
                     ChasePlayer();
                 }
-                else
+                else if (_perception == null)
                 {
+                    // 无感知组件回退：脱离检测距离即回巡逻（等价旧版）
                     SetState(EnemyState.Patrol);
                     Patrol();
+                }
+                else
+                {
+                    // 丢失视线：立即转入搜索（松散接近最后已知区域，不再精确寻路到脚下）
+                    EnterSearch();
                 }
                 break;
 
             case EnemyState.Attack:
-                if (distance > attackRange)
+                if (!sees)
                 {
-                    if (_hasInitialTarget)
-                    {
-                        SetState(EnemyState.Hunt);
-                        ChasePlayer();
-                    }
-                    else if (distance <= detectRange)
-                    {
-                        SetState(EnemyState.Chase);
-                        ChasePlayer();
-                    }
-                    else
-                    {
-                        SetState(EnemyState.Patrol);
-                        Patrol();
-                    }
+                    // 丢失视线（掩体后）→ 直接转搜索，不再站桩隔墙开枪、也不精确寻路追脚下
+                    EnterSearch();
+                }
+                else if (distance > attackRange)
+                {
+                    SetState(EnemyState.Chase);
+                    ChasePlayer();
                 }
                 else
                 {
                     AttackPlayer();
                 }
                 break;
+
+            case EnemyState.Search:
+                if (sees)
+                {
+                    // 环顾/途中再发现玩家 → 恢复追击链
+                    _searchLooking = false;
+                    if (distance <= attackRange)
+                    {
+                        SetState(EnemyState.Attack);
+                        AttackPlayer();
+                    }
+                    else
+                    {
+                        SetState(EnemyState.Chase);
+                        ChasePlayer();
+                    }
+                    break;
+                }
+                if (heard)
+                {
+                    // 搜索期间听到新动静：重新跑向新声源区域（锚点偏移超阈值时移动阶段会重选落点）
+                    _searchLooking = false;
+                    _searchTimer = searchDuration;
+                }
+
+                if (!_searchLooking)
+                {
+                    // 跑向搜索区域（情报点周围松散落点，用户反馈：目的地范围化）
+                    Vector3 anchor = GetSearchAnchor();
+                    if (HorizontalDistance(anchor, _searchDestAnchor) > 3f)
+                    {
+                        _searchDestAnchor = anchor;
+                        _searchDestination = PickLoosePoint(anchor, searchSpreadMin, searchSpreadMax);
+                    }
+                    ChaseToPosition(_searchDestination);
+                    if (!_navAgent.pathPending &&
+                        HorizontalDistance(transform.position, _searchDestination) <= _navAgent.stoppingDistance + 0.6f)
+                    {
+                        _searchLooking = true;
+                        _searchTimer = searchDuration;
+                    }
+                }
+                else
+                {
+                    // 到达：原地环顾（站桩慢速旋转）
+                    if (_navAgent != null && !_navAgent.isStopped)
+                    {
+                        _navAgent.isStopped = true;
+                        _navAgent.velocity = Vector3.zero;
+                        _navAgent.updateRotation = false;   // 接管转向做环顾
+                    }
+                    transform.Rotate(0f, searchTurnSpeed * Time.deltaTime, 0f);
+                    _searchTimer -= Time.deltaTime;
+                    if (_searchTimer <= 0f)
+                    {
+                        _searchLooking = false;
+                        if (_hasInitialTarget && reHuntOnSearchTimeout)
+                        {
+                            // D8 兜底：向最后已知情报区域重新进发（锚点周围 5~10m 松散落点）
+                            BeginHunt(GetSearchAnchor(), reHuntMinOffset, reHuntMaxOffset);
+                        }
+                        else
+                        {
+                            SetState(EnemyState.Patrol);
+                            Patrol();
+                        }
+                    }
+                }
+                break;
         }
+    }
+
+    /// <summary>搜索锚点：有情报=最后已知玩家位置；无情报=当前位置（就近搜索，绝不使用实时位置/世界原点）</summary>
+    private Vector3 GetSearchAnchor()
+    {
+        return _perception != null && _perception.HasIntel ? _perception.LastKnownPlayerPos : transform.position;
+    }
+
+    /// <summary>进入搜索：跑向情报点周围松散落点，到达后原地环顾 searchDuration 秒</summary>
+    private void EnterSearch()
+    {
+        SetState(EnemyState.Search);
+        _searchLooking = false;
+        _searchTimer = searchDuration;
+        _searchDestAnchor = GetSearchAnchor();
+        _searchDestination = PickLoosePoint(_searchDestAnchor, searchSpreadMin, searchSpreadMax);
+    }
+
+    /// <summary>
+    /// 松散落点：锚点周围 minR~maxR 环带随机取点并吸附 NavMesh（失败则用原始偏移点）。
+    /// 所有以玩家情报为来源的寻路目的地都必须经此转换——禁止以确切位置为终点（用户反馈：堵门/贴脸根因）
+    /// </summary>
+    private Vector3 PickLoosePoint(Vector3 anchor, float minR, float maxR)
+    {
+        Vector2 circle = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(minR, maxR);
+        Vector3 raw = anchor + new Vector3(circle.x, 0f, circle.y);
+        if (NavMesh.SamplePosition(raw, out NavMeshHit hit, 2f, NavMesh.AllAreas))
+            return hit.position;
+        return raw;
     }
 
     private void SetState(EnemyState next)
@@ -220,6 +376,14 @@ public class EnemyBase : MonoBehaviour
         if (_state == next)
             return;
         _state = next;
+    }
+
+    /// <summary>水平（XZ）距离：到达判定专用——lastKnown/注入点可能记录在高处（传送未落地等），y 差不应阻塞到达</summary>
+    private static float HorizontalDistance(Vector3 a, Vector3 b)
+    {
+        var d = a - b;
+        d.y = 0f;
+        return d.magnitude;
     }
 
     /// <summary>用实际移动速度驱动动画 Blend Tree（Speed 参数）</summary>
@@ -266,13 +430,38 @@ public class EnemyBase : MonoBehaviour
         // 无路径（出生或刚到达）时切到下一个路点，实现循环巡逻
         if (!_navAgent.hasPath || _navAgent.remainingDistance <= _navAgent.stoppingDistance)
         {
-            _navAgent.SetDestination(patrolPoints[_currentPatrolIndex].position);
-            _currentPatrolIndex = (_currentPatrolIndex + 1) % patrolPoints.Length;
+            // 环形跳过 null 路点元素（防御 prefab 断链置空的数据形态），全空视为无路点
+            Transform next = null;
+            for (int i = 0; i < patrolPoints.Length; i++)
+            {
+                var cand = patrolPoints[(_currentPatrolIndex + i) % patrolPoints.Length];
+                if (cand != null)
+                {
+                    next = cand;
+                    _currentPatrolIndex = (_currentPatrolIndex + i + 1) % patrolPoints.Length;
+                    break;
+                }
+            }
+            if (next == null)
+            {
+                if (_navAgent.hasPath)
+                {
+                    _navAgent.ResetPath();
+                }
+                return;
+            }
+            _navAgent.SetDestination(next.position);
         }
     }
 
     /// <summary>追击玩家</summary>
     private void ChasePlayer()
+    {
+        ChaseToPosition(_playerTransform.position);
+    }
+
+    /// <summary>向指定点机动（追击/追最后已知位置共用）：恢复移动 + 把转向权还给 NavMeshAgent</summary>
+    private void ChaseToPosition(Vector3 target)
     {
         if (_navAgent == null)
         {
@@ -283,7 +472,7 @@ public class EnemyBase : MonoBehaviour
         _navAgent.isStopped = false;
         _navAgent.updateRotation = true;    // 把转向权还给 NavMeshAgent
         _navAgent.speed = chaseSpeed;
-        _navAgent.SetDestination(_playerTransform.position);
+        _navAgent.SetDestination(target);
     }
 
     /// <summary>攻击玩家：停下 → 转身面向玩家 → 冷却结束后从胸口向玩家胸口 Raycast（决策 D1），命中才扣血（掩体天然挡弹）</summary>

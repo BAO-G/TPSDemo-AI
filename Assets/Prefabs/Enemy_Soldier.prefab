@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 2727217693322215545}
   - component: {fileID: 4502055178023606228}
   - component: {fileID: 3479790620020530969}
+  - component: {fileID: 1198543149701230731}
   m_Layer: 0
   m_Name: Enemy_Soldier
   m_TagString: Untagged
@@ -107,6 +108,21 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
+--- !u!114 &1198543149701230731
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 773090635431400700}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b2736fb0e2ad0b48be26e0d9c420804, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sightRange: 20
+  fovAngle: 80
+  perceptionTick: 0.2
 --- !u!1001 &6442910501716730920
 PrefabInstance:
   m_ObjectHideFlags: 0

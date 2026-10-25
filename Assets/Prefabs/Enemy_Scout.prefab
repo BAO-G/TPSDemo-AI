@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5163510270637158873}
   - component: {fileID: 2021797796794884748}
   - component: {fileID: 6432734157347302698}
+  - component: {fileID: 6340648477514991817}
   m_Layer: 0
   m_Name: Enemy_Scout
   m_TagString: Untagged
@@ -107,6 +108,21 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
+--- !u!114 &6340648477514991817
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9188920505106996243}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b2736fb0e2ad0b48be26e0d9c420804, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sightRange: 25
+  fovAngle: 100
+  perceptionTick: 0.2
 --- !u!1001 &3793003473539071156
 PrefabInstance:
   m_ObjectHideFlags: 0
