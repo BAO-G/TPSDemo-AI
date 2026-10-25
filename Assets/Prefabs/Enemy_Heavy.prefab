@@ -109,18 +109,16 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
-  searchDuration: 5
+  searchDuration: 6
   searchTurnSpeed: 90
   reHuntOnSearchTimeout: 1
-  reHuntMinOffset: 5
-  reHuntMaxOffset: 10
   engageMinDistance: 6
   engageMaxDistance: 13
   strafeSpeed: 2
   strafeSwitchInterval: 0.8
   backOffSpeed: 2.5
-  huntSpreadMin: 2
-  huntSpreadMax: 5
+  huntSpreadMin: 10
+  huntSpreadMax: 16
   searchSpreadMin: 4
   searchSpreadMax: 8
 --- !u!114 &1732209730336055544

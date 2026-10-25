@@ -7,7 +7,8 @@ using UnityEngine.AI;
 ///   Hunt    波次寻敌（D8）：只冲出生时注入的目标点，到达后进 Search；不追踪玩家实时位置
 ///   Chase   追击玩家（视觉确认中）
 ///   Attack  交战距离纪律（S4）：过近后撤/偏好带内侧移/超程追击 + 转向开火（决策 D1）；视觉门控（掩体后不开枪）
-///   Search  调查：跑向最后已知位置 → 原地环顾 searchDuration → 期间听见/看见恢复追击；超时守卫回 Patrol、波次敌人兜底重新进发（reHuntOnSearchTimeout）
+///   Search  调查（用户反馈v2 扩展环搜索）：以情报点为中心，首圈贴近查看 → 超时每轮环半径 +reHuntExpansionStep 外扩，
+///          封顶 reHuntMaxRadius 后回卷内圈往复扫掠；看见恢复追击、新声源（距中心>6m）搬迁重搜；守卫超时回 Patrol、波次敌人持续扫掠
 ///   Dead    死亡静置期
 /// 行为分层（D8）：看见→Chase/Attack；听到（噪音半径内）→Search 调查
 /// 挂载时需同时添加 NavMeshAgent 组件，场景需有烘焙的 NavMesh
@@ -39,12 +40,13 @@ public class EnemyBase : MonoBehaviour
     [Header("部位(4C新增)")]
     public float headshotMultiplier = 2f;          // 爆头伤害倍率（FirearmWeapon 读取）
 
-    [Header("搜索参数(阶段6 S3/S4)")]
-    public float searchDuration = 5f;              // 到达搜索区域后的环顾时长（秒）
+    [Header("搜索参数(阶段6 S3/S4，用户反馈v2：扩展环搜索)")]
+    public float searchDuration = 6f;              // 到达搜索落点后的环顾时长（秒）
     public float searchTurnSpeed = 90f;            // 环顾转速（度/秒）
-    public bool reHuntOnSearchTimeout = true;      // 波次敌人兜底（D8）：搜索超时后向最后已知情报区域重新进发，防全程隐身卡关
-    public float reHuntMinOffset = 5f;             // reHunt 目标距情报锚点的最小偏移（米）
-    public float reHuntMaxOffset = 10f;            // reHunt 目标距情报锚点的最大偏移（米）
+    public bool reHuntOnSearchTimeout = true;      // 波次敌人兜底（D8）：搜索永不放弃，扩展环持续扫掠，防全程隐身卡关
+    public float reHuntExpansionStep = 7f;         // 每轮搜索超时后环半径递增（米）——搜索范围随时间外扩，不再围着情报点打小转
+    public float reHuntMaxRadius = 32f;            // 扩展环封顶半径：到顶回卷内圈重新外扫（往复扫掠，覆盖大范围不呆站）
+    public float searchSpeed = 4f;                 // 搜索移动速度（低于追击：观感是"搜"不是"追"，缓解高频打转）
 
     [Header("交战参数(阶段6 S4)")]
     public float engageMinDistance = 6f;           // 偏好交战距离下限（每敌 Start 随机取值，交战距离分散治贴脸）
@@ -54,10 +56,10 @@ public class EnemyBase : MonoBehaviour
     public float backOffSpeed = 2.5f;              // 过近后撤速度
 
     [Header("寻路范围参数(阶段6 用户反馈：目的地松散化)")]
-    public float huntSpreadMin = 2f;               // 开波进发：注入点周围随机落点最小半径（米）
-    public float huntSpreadMax = 5f;               // 开波进发：注入点周围随机落点最大半径（米）
-    public float searchSpreadMin = 4f;             // 搜索接近：情报点周围随机落点最小半径（米）
-    public float searchSpreadMax = 8f;             // 搜索接近：情报点周围随机落点最大半径（米）
+    public float huntSpreadMin = 10f;              // 开波进发：注入点周围随机落点最小半径（米）——保持距离搜索，不贴脸
+    public float huntSpreadMax = 16f;              // 开波进发：注入点周围随机落点最大半径（米）
+    public float searchSpreadMin = 4f;             // 首圈搜索：情报点周围随机落点最小半径（米）
+    public float searchSpreadMax = 8f;             // 首圈搜索：情报点周围随机落点最大半径（米）
 
     private float _currentHealth;
     private NavMeshAgent _navAgent;
@@ -76,16 +78,19 @@ public class EnemyBase : MonoBehaviour
     private bool _hasInitialTarget;
     private EnemyPerception _perception;   // 感知组件（S2；prefab 未挂时回退纯距离判定，保持兼容）
     private EnemyHealthBar _healthBar;     // 头顶血条（S5，prefab 未挂时静默跳过）
-    private bool _searchLooking;           // Search 子阶段：false=跑向搜索区域，true=原地环顾
+    private bool _searchLooking;           // Search 子阶段：false=跑向搜索落点，true=原地环顾
     private float _searchTimer;
-    private Vector3 _searchDestination;    // Search 实际寻路目的地（情报点周围松散落点）
-    private Vector3 _searchDestAnchor;     // 搜索目的地对应的情报锚点（情报移动过大时重选落点）
+    private Vector3 _searchDestination;    // 当前轮搜索落点（环带上随机取点吸附 NavMesh）
+    private Vector3 _searchCenter;         // 搜索中心：丢失视线/开波到达/新声源搬迁时确立，扩展环围绕它外扩
+    private float _searchRing;             // 当前扩展环半径（0=首圈贴情报点）
 
     // ===== S4 交战距离纪律（每敌随机，运行时生成无注入问题）=====
     private float _preferredEngage;        // 本敌偏好交战距离
     private int _strafeDir = 1;            // 侧移方向
     private float _strafeTimer;
     private readonly RaycastHit[] _fireHitBuffer = new RaycastHit[8];   // 开火射线非分配缓冲（跳过自身）
+    private Vector3 _lastMoveTarget;       // 上次设定的寻路目的地（MoveToPosition 重设门控用）
+    private bool _hasMoveTarget;
 
     /// <summary>当前状态（调试/测试观测用）</summary>
     public EnemyState State => _state;
@@ -210,15 +215,14 @@ public class EnemyBase : MonoBehaviour
                 }
                 else if (heard)
                 {
-                    // 听到动静：前往声源最后已知位置调查（不直接追击）
+                    // 听到动静：贴声源区域转入扩展环搜索（不直接追击）
                     EnterSearch();
-                    ChaseToPosition(_perception.LastKnownPlayerPos);
                 }
                 else if (_hasInitialTarget)
                 {
-                    // 波次敌人兜底：绝不滞留巡逻（S3 起为冲注入点语义）
+                    // 波次敌人兜底：绝不滞留巡逻（S3 起为冲注入点语义；仍走松散落点不踩确切坐标）
                     SetState(EnemyState.Hunt);
-                    ChaseToPosition(_initialHuntTarget);
+                    ChaseToPosition(_huntDestination);
                 }
                 else
                 {
@@ -246,9 +250,15 @@ public class EnemyBase : MonoBehaviour
                 {
                     // D8：只进发到注入点周围的松散落点（_huntDestination），不追踪玩家实时位置
                     ChaseToPosition(_huntDestination);
+                    // 到达判定：落点到达，或部分路径走完停摆（目的地在孤立 NavMesh 上走不完全程）
                     if (!_navAgent.pathPending &&
-                        HorizontalDistance(transform.position, _huntDestination) <= _navAgent.stoppingDistance + 1.5f)
+                        (HorizontalDistance(transform.position, _huntDestination) <= _navAgent.stoppingDistance + 1.5f ||
+                         (_navAgent.pathStatus != NavMeshPathStatus.PathComplete && _navAgent.velocity.sqrMagnitude < 0.0025f)))
+                    {
+                        // 到达进发落点：以到达点为中心开始扩展环搜索（无情报时 GetSearchAnchor=当前位置，
+                        // 不会故意走回注入锚点贴脸——用户要求：离远些搜索，直到玩家暴露在视线内）
                         EnterSearch();
+                    }
                 }
                 break;
 
@@ -295,7 +305,7 @@ public class EnemyBase : MonoBehaviour
             case EnemyState.Search:
                 if (sees)
                 {
-                    // 环顾/途中再发现玩家 → 恢复追击链
+                    // 环顾/途中再发现玩家 → 恢复追击链（下次进搜索时扩展环自动归零）
                     _searchLooking = false;
                     if (distance <= attackRange)
                     {
@@ -309,25 +319,21 @@ public class EnemyBase : MonoBehaviour
                     }
                     break;
                 }
-                if (heard)
+                if (heard && HorizontalDistance(_perception.LastKnownPlayerPos, _searchCenter) > 6f)
                 {
-                    // 搜索期间听到新动静：重新跑向新声源区域（锚点偏移超阈值时移动阶段会重选落点）
-                    _searchLooking = false;
-                    _searchTimer = searchDuration;
+                    // 新声源明显远离当前搜索中心（如远处开枪）：整体搬迁搜索中心并归零扩展环；
+                    // 近距离持续声响（隔墙蹲伏 3m 内）不重置——防敌人被持续听觉钉死在玩家实时位置绕小圈
+                    EnterSearch();
                 }
 
                 if (!_searchLooking)
                 {
-                    // 跑向搜索区域（情报点周围松散落点，用户反馈：目的地范围化）
-                    Vector3 anchor = GetSearchAnchor();
-                    if (HorizontalDistance(anchor, _searchDestAnchor) > 3f)
-                    {
-                        _searchDestAnchor = anchor;
-                        _searchDestination = PickLoosePoint(anchor, searchSpreadMin, searchSpreadMax);
-                    }
-                    ChaseToPosition(_searchDestination);
+                    // 跑向当前轮搜索落点（searchSpeed 搜索节奏，非追击冲刺）
+                    MoveToPosition(_searchDestination, searchSpeed);
+                    // 到达判定：落点到达，或部分路径走完停摆（环带落点可能在孤立/断崖 NavMesh 上）
                     if (!_navAgent.pathPending &&
-                        HorizontalDistance(transform.position, _searchDestination) <= _navAgent.stoppingDistance + 0.6f)
+                        (HorizontalDistance(transform.position, _searchDestination) <= _navAgent.stoppingDistance + 0.6f ||
+                         (_navAgent.pathStatus != NavMeshPathStatus.PathComplete && _navAgent.velocity.sqrMagnitude < 0.0025f)))
                     {
                         _searchLooking = true;
                         _searchTimer = searchDuration;
@@ -346,11 +352,14 @@ public class EnemyBase : MonoBehaviour
                     _searchTimer -= Time.deltaTime;
                     if (_searchTimer <= 0f)
                     {
-                        _searchLooking = false;
+                        // 本轮环顾无收获：波次敌人扩环继续扫（封顶回卷内圈往复）；守卫回巡逻
                         if (_hasInitialTarget && reHuntOnSearchTimeout)
                         {
-                            // D8 兜底：向最后已知情报区域重新进发（锚点周围 5~10m 松散落点）
-                            BeginHunt(GetSearchAnchor(), reHuntMinOffset, reHuntMaxOffset);
+                            _searchRing = _searchRing + reHuntExpansionStep > reHuntMaxRadius
+                                ? 0f
+                                : _searchRing + reHuntExpansionStep;
+                            _searchDestination = PickSearchPoint();
+                            _searchLooking = false;
                         }
                         else
                         {
@@ -369,27 +378,46 @@ public class EnemyBase : MonoBehaviour
         return _perception != null && _perception.HasIntel ? _perception.LastKnownPlayerPos : transform.position;
     }
 
-    /// <summary>进入搜索：跑向情报点周围松散落点，到达后原地环顾 searchDuration 秒</summary>
+    /// <summary>
+    /// 进入搜索：确立搜索中心（有情报=最后已知位置，无情报=当前位置即到达点），环0（首圈接近落点）开始扩展环搜索。
+    /// 丢失视线/听见动静/开波到达都走这里，扩展环只在每轮环顾超时后推进
+    /// </summary>
     private void EnterSearch()
     {
         SetState(EnemyState.Search);
         _searchLooking = false;
         _searchTimer = searchDuration;
-        _searchDestAnchor = GetSearchAnchor();
-        _searchDestination = PickLoosePoint(_searchDestAnchor, searchSpreadMin, searchSpreadMax);
+        _searchCenter = GetSearchAnchor();
+        _searchRing = 0f;
+        _searchDestination = PickSearchPoint();
+        MoveToPosition(_searchDestination, searchSpeed);
+    }
+
+    /// <summary>当前轮搜索落点：首圈=情报点周围 searchSpread 环带；扩展轮=中心周围当前环半径（±2m 抖动）</summary>
+    private Vector3 PickSearchPoint()
+    {
+        float r = _searchRing <= 0f
+            ? Random.Range(searchSpreadMin, searchSpreadMax)
+            : Mathf.Max(2f, _searchRing + Random.Range(-2f, 2f));
+        return PickLoosePoint(_searchCenter, r, r);
     }
 
     /// <summary>
-    /// 松散落点：锚点周围 minR~maxR 环带随机取点并吸附 NavMesh（失败则用原始偏移点）。
+    /// 松散落点：锚点周围 minR~maxR 环带随机取点并吸附 NavMesh。
+    /// 多次尝试并逐步放大吸附容差（2/4/6/8m）：扩展环落点可能落在 NavMesh 外（岛缘），全失败回退锚点本身
+    /// （锚点必可达——它来自敌人到过的位置或注入情报点），防 SetDestination 不可达导致站桩卡死。
     /// 所有以玩家情报为来源的寻路目的地都必须经此转换——禁止以确切位置为终点（用户反馈：堵门/贴脸根因）
     /// </summary>
     private Vector3 PickLoosePoint(Vector3 anchor, float minR, float maxR)
     {
-        Vector2 circle = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(minR, maxR);
-        Vector3 raw = anchor + new Vector3(circle.x, 0f, circle.y);
-        if (NavMesh.SamplePosition(raw, out NavMeshHit hit, 2f, NavMesh.AllAreas))
-            return hit.position;
-        return raw;
+        for (int i = 0; i < 4; i++)
+        {
+            Vector2 circle = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(minR, maxR);
+            Vector3 raw = anchor + new Vector3(circle.x, 0f, circle.y);
+            if (NavMesh.SamplePosition(raw, out NavMeshHit hit, 2f * (i + 1), NavMesh.AllAreas))
+                return hit.position;
+        }
+        return anchor;
     }
 
     private void SetState(EnemyState next)
@@ -481,8 +509,16 @@ public class EnemyBase : MonoBehaviour
         ChaseToPosition(_playerTransform.position);
     }
 
-    /// <summary>向指定点机动（追击/追最后已知位置共用）：恢复移动 + 把转向权还给 NavMeshAgent</summary>
+    /// <summary>向指定点追击机动（追击/进发共用，chaseSpeed）</summary>
     private void ChaseToPosition(Vector3 target)
+    {
+        MoveToPosition(target, chaseSpeed);
+    }
+
+    /// <summary>向指定点机动：恢复移动 + 把转向权还给 NavMeshAgent + 按用途设定速度（追击/搜索分速）。
+    /// 目的地变化超阈值或路径丢失才重设——每帧 SetDestination 会反复重排队路径计算，
+    /// pathPending 长期为真使到达判定永不触发（Play 实测卡点：rem=0/vel=0 但 pend=true 原地站立）</summary>
+    private void MoveToPosition(Vector3 target, float speed)
     {
         if (_navAgent == null)
         {
@@ -492,8 +528,15 @@ public class EnemyBase : MonoBehaviour
         // 从攻击状态恢复移动（攻击时 isStopped=true，若不移除会一直卡在原地）
         _navAgent.isStopped = false;
         _navAgent.updateRotation = true;    // 把转向权还给 NavMeshAgent
-        _navAgent.speed = chaseSpeed;
-        _navAgent.SetDestination(target);
+        _navAgent.speed = speed;
+        if (!_hasMoveTarget ||
+            HorizontalDistance(target, _lastMoveTarget) > 0.5f ||
+            (!_navAgent.hasPath && !_navAgent.pathPending))
+        {
+            _lastMoveTarget = target;
+            _hasMoveTarget = true;
+            _navAgent.SetDestination(target);
+        }
     }
 
     /// <summary>攻击行为（S4 交战距离纪律）：过近后撤、偏好带内侧移（不再站桩贴脸），转向与开火与移动解耦</summary>

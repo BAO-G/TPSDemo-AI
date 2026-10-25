@@ -1519,6 +1519,39 @@ CameraTarget：PlayerController 只写 localRotation（俯仰视角），
 
 ---
 
+## 阶段 6 S7 敌人搜索行为 v2：扩展环搜索 + 开波距离纪律（2026-10-26）
+
+> 用户反馈：开场敌人依旧精准寻路到玩家面前；丢失目标后搜索范围太小太频繁，围着玩家位置小圈打转
+
+### 根因分析
+
+| 现象 | 根因 |
+|------|------|
+| 开场贴脸 | 波次生成器注入玩家出生点为 Hunt 锚点，预制体 `huntSpreadMin/Max=2/5`——敌人寻路到距锚点仅 2~5m |
+| 围着玩家打小转 | 搜索超时 reHunt 偏移固定 5~10m 且锚点每轮漂移，永远在情报点 ~10m 内循环；近距离持续听觉（蹲 3m/走 5m）每 tick 把搜索中心钉回玩家实时位置 |
+| 显得频繁 | 搜索移动沿用追击速度（5.5~6.5m/s），观感是"冲刺打转"而非"搜索" |
+| （实测新发现）原地站立卡死 | 移动阶段每帧 SetDestination 反复重排队路径计算，pathPending 长期为真 → 到达判定 `!pathPending` 永不触发（rem=0/vel=0 但 pend=true，经典 Unity 陷阱） |
+
+### 变更内容
+
+| 文件 | 内容 |
+|------|------|
+| `EnemyBase.cs` | ① **扩展环搜索**：Search 确立 `_searchCenter`+`_searchRing`，首圈贴情报点（searchSpread 4~8m），每轮环顾超时环半径 +7m（`reHuntExpansionStep`），封顶 32m（`reHuntMaxRadius`）回卷内圈往复扫掠——替代旧"reHunt 固定偏移"模型（`reHuntMin/MaxOffset` 字段删除）② **新声源搬迁门控**：搜索中听见动静仅当声源距当前中心 >6m 才整体搬迁重搜，防持续听觉钉死 ③ **搜索分速** `searchSpeed=4`（MoveToPosition 拆分，追击/搜索分速）④ **开波 huntSpread 默认 2~5→10~16**：进发到锚点外 10~16m 即停转搜索，不贴脸 ⑤ **SetDestination 门控**：目的地变化 >0.5m 或路径丢失才重设（修每帧重排队卡死）⑥ **部分路径自愈**：`PathPartial` 且速度归零视为本轮到达，防孤立 NavMesh 落点永久卡 Hunt/Search ⑦ PickLoosePoint 吸附容差递增重试（2/4/6/8m），全失败回退锚点本身（必可达） |
+| `Enemy_Soldier/Scout/Heavy.prefab` | huntSpreadMin 2→10、huntSpreadMax 5→16、searchDuration 5→6、删除 reHuntMin/MaxOffset 残留序列化行 |
+
+### Play 验证（两轮，快进波次计时器 + T+10s 反射禁用感知模拟玩家完全隐身）
+
+| 检查点 | 结果 |
+|--------|------|
+| 开波距离 | 全员 Hunt 落点距玩家 ≥9.2m，无人进入 8m 内（旧版此时已贴脸）✅ |
+| 环推进 | 0→7→14→21→28（封顶）→回卷 0 完整周期；Soldier_1 距离轨迹 15.7→7.0→25.3→36.6m（扫掠路过即离开，不驻留）✅ |
+| 卡点 | 第二轮修复后 80s 全程 stall=0（修复前 8 敌中 6 个 pend=true 原地站立）✅ |
+| 分速 | Search 移动 v=4.0（searchSpeed）✅ |
+| 视觉发现 | 隐身前看见过玩家的敌人，搜索中心=真实目击点，回卷扫掠路过该点（正确搜索教义）✅ |
+| 截图 | `Assets/Screenshots/阶段6S7_扩展环搜索验证.png`、`阶段6S7_扩展环搜索验证_终.png` |
+
+---
+
 ## 下一阶段
 
 > **规划基准已迁移至 [DEVELOPMENT_PLAN.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVELOPMENT_PLAN.md)（2026-09-06 创建）**——后续开发以该文档为准，包含完整差距分析、已确认决策（D1 Raycast弹道 / D2 轻量静态事件 / D3 波次生存模式 / D4 任务包顺序）、接口定义、进度计划与测试策略。
