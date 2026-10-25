@@ -6,7 +6,7 @@ using UnityEngine.AI;
 ///   Patrol  巡逻路点/原地待命（散装守卫用）
 ///   Hunt    波次寻敌（D8）：只冲出生时注入的目标点，到达后进 Search；不追踪玩家实时位置
 ///   Chase   追击玩家（视觉确认中）
-///   Attack  站桩转向 + Raycast 弹道（决策 D1）；视觉门控（掩体后不开枪）
+///   Attack  交战距离纪律（S4）：过近后撤/偏好带内侧移/超程追击 + 转向开火（决策 D1）；视觉门控（掩体后不开枪）
 ///   Search  调查：跑向最后已知位置 → 原地环顾 searchDuration → 期间听见/看见恢复追击；超时守卫回 Patrol、波次敌人兜底重新进发（reHuntOnSearchTimeout）
 ///   Dead    死亡静置期
 /// 行为分层（D8）：看见→Chase/Attack；听到（噪音半径内）→Search 调查
@@ -46,11 +46,18 @@ public class EnemyBase : MonoBehaviour
     public float reHuntMinOffset = 5f;             // reHunt 目标距情报锚点的最小偏移（米）
     public float reHuntMaxOffset = 10f;            // reHunt 目标距情报锚点的最大偏移（米）
 
+    [Header("交战参数(阶段6 S4)")]
+    public float engageMinDistance = 6f;           // 偏好交战距离下限（每敌 Start 随机取值，交战距离分散治贴脸）
+    public float engageMaxDistance = 13f;          // 偏好交战距离上限
+    public float strafeSpeed = 2f;                 // 交战侧移速度
+    public float strafeSwitchInterval = 0.8f;      // 侧移换向间隔（秒）
+    public float backOffSpeed = 2.5f;              // 过近后撤速度
+
     [Header("寻路范围参数(阶段6 用户反馈：目的地松散化)")]
     public float huntSpreadMin = 2f;               // 开波进发：注入点周围随机落点最小半径（米）
     public float huntSpreadMax = 5f;               // 开波进发：注入点周围随机落点最大半径（米）
-    public float searchSpreadMin = 2f;             // 搜索接近：情报点周围随机落点最小半径（米）
-    public float searchSpreadMax = 5f;             // 搜索接近：情报点周围随机落点最大半径（米）
+    public float searchSpreadMin = 4f;             // 搜索接近：情报点周围随机落点最小半径（米）
+    public float searchSpreadMax = 8f;             // 搜索接近：情报点周围随机落点最大半径（米）
 
     private float _currentHealth;
     private NavMeshAgent _navAgent;
@@ -72,6 +79,12 @@ public class EnemyBase : MonoBehaviour
     private float _searchTimer;
     private Vector3 _searchDestination;    // Search 实际寻路目的地（情报点周围松散落点）
     private Vector3 _searchDestAnchor;     // 搜索目的地对应的情报锚点（情报移动过大时重选落点）
+
+    // ===== S4 交战距离纪律（每敌随机，运行时生成无注入问题）=====
+    private float _preferredEngage;        // 本敌偏好交战距离
+    private int _strafeDir = 1;            // 侧移方向
+    private float _strafeTimer;
+    private readonly RaycastHit[] _fireHitBuffer = new RaycastHit[8];   // 开火射线非分配缓冲（跳过自身）
 
     /// <summary>当前状态（调试/测试观测用）</summary>
     public EnemyState State => _state;
@@ -119,6 +132,10 @@ public class EnemyBase : MonoBehaviour
         _perception = GetComponent<EnemyPerception>();
         if (_perception != null && _playerTransform != null)
             _perception.Init(_playerTransform, _playerTransform.GetComponent<PlayerNoiseEmitter>());
+
+        // S4：每敌随机偏好交战距离（交战距离分散，杜绝全员贴脸）
+        _preferredEngage = Random.Range(engageMinDistance, engageMaxDistance);
+        _strafeTimer = strafeSwitchInterval;
 
         SetupHeadPart();
     }
@@ -180,7 +197,7 @@ public class EnemyBase : MonoBehaviour
                 if (distance <= attackRange && sees)
                 {
                     SetState(EnemyState.Attack);
-                    AttackPlayer();
+                    AttackUpdate(distance);
                 }
                 else if (sees)
                 {
@@ -209,7 +226,7 @@ public class EnemyBase : MonoBehaviour
                 if (distance <= attackRange && sees)
                 {
                     SetState(EnemyState.Attack);
-                    AttackPlayer();
+                    AttackUpdate(distance);
                 }
                 else if (sees)
                 {
@@ -235,7 +252,7 @@ public class EnemyBase : MonoBehaviour
                 if (distance <= attackRange && sees)
                 {
                     SetState(EnemyState.Attack);
-                    AttackPlayer();
+                    AttackUpdate(distance);
                 }
                 else if (sees)
                 {
@@ -267,7 +284,7 @@ public class EnemyBase : MonoBehaviour
                 }
                 else
                 {
-                    AttackPlayer();
+                    AttackUpdate(distance);
                 }
                 break;
 
@@ -279,7 +296,7 @@ public class EnemyBase : MonoBehaviour
                     if (distance <= attackRange)
                     {
                         SetState(EnemyState.Attack);
-                        AttackPlayer();
+                        AttackUpdate(distance);
                     }
                     else
                     {
@@ -475,19 +492,50 @@ public class EnemyBase : MonoBehaviour
         _navAgent.SetDestination(target);
     }
 
-    /// <summary>攻击玩家：停下 → 转身面向玩家 → 冷却结束后从胸口向玩家胸口 Raycast（决策 D1），命中才扣血（掩体天然挡弹）</summary>
-    private void AttackPlayer()
+    /// <summary>攻击行为（S4 交战距离纪律）：过近后撤、偏好带内侧移（不再站桩贴脸），转向与开火与移动解耦</summary>
+    private void AttackUpdate(float distance)
     {
         if (_navAgent != null)
         {
-            // 用 isStopped 停住 NavMeshAgent，代替 SetDestination(自身)，避免路径重算阻塞
-            _navAgent.isStopped = true;
-            _navAgent.velocity = Vector3.zero;
-            // NavMeshAgent 只在移动时自动转向；站桩攻击必须接管转向，否则模型背对玩家开枪
             if (_navAgent.updateRotation)
-                _navAgent.updateRotation = false;
+                _navAgent.updateRotation = false;   // 朝向由 FaceAndFire 手动控制
+
+            if (distance < _preferredEngage - 0.5f)
+            {
+                // 过近：后撤拉开距离（用户反馈核心——敌人不再赖在脸上）
+                Vector3 away = transform.position - _playerTransform.position;
+                away.y = 0f;
+                away = away.sqrMagnitude > 0.001f ? away.normalized : Vector3.back;
+                _navAgent.isStopped = false;
+                _navAgent.speed = backOffSpeed;
+                _navAgent.SetDestination(transform.position + away * 3f);
+            }
+            else
+            {
+                // 偏好带内：左右横移（S4 侧移射击），换向带随机防整齐划一
+                _strafeTimer -= Time.deltaTime;
+                if (_strafeTimer <= 0f)
+                {
+                    _strafeDir = -_strafeDir;
+                    _strafeTimer = strafeSwitchInterval + Random.Range(0f, 0.4f);
+                }
+                Vector3 toPlayer = _playerTransform.position - transform.position;
+                toPlayer.y = 0f;
+                Vector3 side = toPlayer.sqrMagnitude > 0.001f
+                    ? Vector3.Cross(Vector3.up, toPlayer.normalized) * _strafeDir
+                    : Vector3.right * _strafeDir;
+                _navAgent.isStopped = false;
+                _navAgent.speed = strafeSpeed;
+                _navAgent.SetDestination(transform.position + side * 2f);
+            }
         }
 
+        FaceAndFire();
+    }
+
+    /// <summary>转向玩家 + 冷却冷却弹道开火（原 AttackPlayer 非移动部分）；射线跳过自身碰撞体</summary>
+    private void FaceAndFire()
+    {
         // 每帧水平转向玩家（在冷却判断之前，保证转动连续）
         if (_playerTransform != null)
         {
@@ -522,18 +570,34 @@ public class EnemyBase : MonoBehaviour
         // 广播敌人开枪事件（音效/受击方向订阅）
         GameEvents.RaiseEnemyShot(transform.position);
 
-        // Raycast 即时弹道：胸口 → 玩家胸口，accuracy 越低弹道偏转越大
+        // Raycast 即时弹道（决策 D1）：胸口 → 玩家低胸位，accuracy 越低散布越大；
+        // NonAlloc + 跳过自身碰撞体——动画中头球可能包住射线起点，普通 Raycast 会自挡（诊断实录）
         Vector3 origin = transform.position + Vector3.up * 1.5f;
-        Vector3 target = _playerTransform.position + Vector3.up * 1.2f;
-        Vector3 dir = (target - origin).normalized;
+        Vector3 target = _playerTransform.position + Vector3.up * 0.5f;
+        Vector3 dir = target - origin;
+        float maxDist = attackRange + 3f;
+        if (dir.magnitude < 0.05f)
+            return;
+        dir.Normalize();
         float spreadDeg = (1f - Mathf.Clamp01(accuracy)) * 15f;
         dir = Quaternion.Euler(
             Random.Range(-spreadDeg, spreadDeg),
             Random.Range(-spreadDeg, spreadDeg),
             0f) * dir;
 
-        float range = attackRange + 3f;
-        if (Physics.Raycast(origin, dir, out RaycastHit hit, range))
+        int count = Physics.RaycastNonAlloc(origin, dir, _fireHitBuffer, maxDist);
+        RaycastHit hit = default(RaycastHit);
+        bool hasHit = false;
+        for (int i = 0; i < count; i++)
+        {
+            if (_fireHitBuffer[i].collider.transform.IsChildOf(transform))
+                continue;   // 自身碰撞体不算命中
+            hit = _fireHitBuffer[i];
+            hasHit = true;
+            break;
+        }
+
+        if (hasHit)
         {
             // 命中：曳光到命中点，命中玩家才扣血（打墙/掩体无效）
             GameEvents.RaiseBulletTrail(origin, hit.point);
@@ -544,7 +608,7 @@ public class EnemyBase : MonoBehaviour
         else
         {
             // 未命中任何物体：曳光打到射程尽头
-            GameEvents.RaiseBulletTrail(origin, origin + dir * range);
+            GameEvents.RaiseBulletTrail(origin, origin + dir * maxDist);
         }
     }
 

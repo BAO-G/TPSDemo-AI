@@ -14,6 +14,8 @@ public class EnemyPerception : MonoBehaviour
     [Header("节流")]
     public float perceptionTick = 0.2f;               // 感知计算间隔（秒），防 14 敌 raycast 风暴
 
+    private readonly RaycastHit[] _hitBuffer = new RaycastHit[8];   // 非分配射线缓冲（防 GC）
+
     private Transform _player;
     private PlayerNoiseEmitter _noise;   // 玩家噪音发射器（Init 注入，可为空=无听觉）
     private float _timer;
@@ -94,7 +96,8 @@ public class EnemyPerception : MonoBehaviour
 
         // 视线：敌人胸口(+1.5m) → 玩家低胸位(脚底+0.5m)。
         // 目标取低位的原因：蹲伏时玩家胶囊仅 0.08~1.08m，取 +1.2m 会从蹲姿头顶掠过打空；
-        // 且目标必须落在玩家胶囊内——射线打空不能视为可见（打中墙/他敌=遮挡，打中玩家=通）
+        // 射线用 RaycastNonAlloc + 跳过自身碰撞体——动画中头球可能包住射线起点，
+        // 普通.Raycast 会"打中自己头部@0m"而误判遮挡（诊断实录 DIAG_1），必须排除自身
         Vector3 origin = transform.position + Vector3.up * 1.5f;
         Vector3 target = _player.position + Vector3.up * 0.5f;
         Vector3 dir = target - origin;
@@ -102,10 +105,14 @@ public class EnemyPerception : MonoBehaviour
         if (losDist < 0.05f)
             return true;
 
-        if (Physics.Raycast(origin, dir / losDist, out RaycastHit hit, losDist))
-            return hit.collider.GetComponentInParent<PlayerHealth>() != null;
-
-        // 射线未命中任何物体：目标点在玩家胶囊内的前提下正常必命中，未命中属异常几何——保守判不可见
+        int count = Physics.RaycastNonAlloc(origin, dir / losDist, _hitBuffer, losDist);
+        for (int i = 0; i < count; i++)
+        {
+            if (_hitBuffer[i].collider.transform.IsChildOf(transform))
+                continue;   // 自身碰撞体（头球/胶囊）不算遮挡
+            return _hitBuffer[i].collider.GetComponentInParent<PlayerHealth>() != null;
+        }
+        // 没有任何非自身命中：目标点在玩家胶囊内的前提下正常必命中——异常几何保守判不可见
         return false;
     }
 }
