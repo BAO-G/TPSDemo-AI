@@ -36,11 +36,18 @@ public class PlayerHealth : MonoBehaviour
 
     public void TakeDamage(float amount)
     {
+        TakeDamage(amount, Vector3.zero);
+    }
+
+    /// <summary>带来源位置的扣血（阶段6 S5）：敌人攻击传入自身位置，供受击方向指示器计算来向；来源未知传 zero</summary>
+    public void TakeDamage(float amount, Vector3 sourcePos)
+    {
         if (amount <= 0f) return;
 
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);
         OnDamaged?.Invoke(amount);
         OnHealthChanged?.Invoke(_currentHealth, maxHealth);
+        GameEvents.RaisePlayerDamagedFrom(sourcePos);   // S5 新增：只增不改，来源为零向量时指示器自行忽略
 
         // 受击时播放 hit reaction 动画（UpperBody 层 HitReaction 状态）
         _animator?.SetTrigger("Hit");

@@ -75,6 +75,7 @@ public class EnemyBase : MonoBehaviour
     private Vector3 _huntDestination;      // Hunt 实际寻路目的地（锚点周围松散落点，用户反馈：不寻路到确切位置）
     private bool _hasInitialTarget;
     private EnemyPerception _perception;   // 感知组件（S2；prefab 未挂时回退纯距离判定，保持兼容）
+    private EnemyHealthBar _healthBar;     // 头顶血条（S5，prefab 未挂时静默跳过）
     private bool _searchLooking;           // Search 子阶段：false=跑向搜索区域，true=原地环顾
     private float _searchTimer;
     private Vector3 _searchDestination;    // Search 实际寻路目的地（情报点周围松散落点）
@@ -132,6 +133,9 @@ public class EnemyBase : MonoBehaviour
         _perception = GetComponent<EnemyPerception>();
         if (_perception != null && _playerTransform != null)
             _perception.Init(_playerTransform, _playerTransform.GetComponent<PlayerNoiseEmitter>());
+
+        // 头顶血条（S5）
+        _healthBar = GetComponent<EnemyHealthBar>();
 
         // S4：每敌随机偏好交战距离（交战距离分散，杜绝全员贴脸）
         _preferredEngage = Random.Range(engageMinDistance, engageMaxDistance);
@@ -599,11 +603,11 @@ public class EnemyBase : MonoBehaviour
 
         if (hasHit)
         {
-            // 命中：曳光到命中点，命中玩家才扣血（打墙/掩体无效）
+            // 命中：曳光到命中点，命中玩家才扣血（打墙/掩体无效）；传自身位置供受击方向指示器（S5）
             GameEvents.RaiseBulletTrail(origin, hit.point);
             var hitPlayer = hit.collider.GetComponentInParent<PlayerHealth>();
             if (hitPlayer != null)
-                hitPlayer.TakeDamage(attackDamage);
+                hitPlayer.TakeDamage(attackDamage, transform.position);
         }
         else
         {
@@ -624,6 +628,10 @@ public class EnemyBase : MonoBehaviour
 
         // 广播敌人受击事件（音效订阅）
         GameEvents.RaiseEnemyDamaged(transform.position);
+
+        // 头顶血条（S5）：受击显示 3s
+        if (_healthBar != null)
+            _healthBar.ShowDamage(_currentHealth / maxHealth);
 
         // 受击时播放 hit reaction 动画（UpperBody 层 HitReaction 状态）
         _animator?.SetTrigger("Hit");
@@ -649,6 +657,10 @@ public class EnemyBase : MonoBehaviour
 
         _isDead = true;
         SetState(EnemyState.Dead);
+
+        // 尸体不留血条（S5）
+        if (_healthBar != null)
+            _healthBar.HidePermanent();
 
         // 广播敌人死亡事件（波次生成/击杀统计订阅）
         GameEvents.RaiseEnemyKilled(transform.position);

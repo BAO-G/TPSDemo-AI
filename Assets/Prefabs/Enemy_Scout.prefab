@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 2021797796794884748}
   - component: {fileID: 6432734157347302698}
   - component: {fileID: 6340648477514991817}
+  - component: {fileID: 5479220082622935366}
   m_Layer: 0
   m_Name: Enemy_Scout
   m_TagString: Untagged
@@ -108,6 +109,20 @@ MonoBehaviour:
   corpseDuration: 10
   attackTurnSpeed: 360
   headshotMultiplier: 2
+  searchDuration: 5
+  searchTurnSpeed: 90
+  reHuntOnSearchTimeout: 1
+  reHuntMinOffset: 5
+  reHuntMaxOffset: 10
+  engageMinDistance: 6
+  engageMaxDistance: 13
+  strafeSpeed: 2
+  strafeSwitchInterval: 0.8
+  backOffSpeed: 2.5
+  huntSpreadMin: 2
+  huntSpreadMax: 5
+  searchSpreadMin: 4
+  searchSpreadMax: 8
 --- !u!114 &6340648477514991817
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -123,6 +138,22 @@ MonoBehaviour:
   sightRange: 25
   fovAngle: 100
   perceptionTick: 0.2
+--- !u!114 &5479220082622935366
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9188920505106996243}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 928913cafaf9a304cab412c237741ebb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  barHeight: 2.2
+  barWidth: 0.6
+  barThickness: 0.07
+  showDuration: 3
 --- !u!1001 &3793003473539071156
 PrefabInstance:
   m_ObjectHideFlags: 0

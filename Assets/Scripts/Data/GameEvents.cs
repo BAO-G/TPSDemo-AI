@@ -11,6 +11,8 @@ public static class GameEvents
     // ===== 玩家 =====
     /// <summary>玩家受击</summary>
     public static event Action OnPlayerDamaged;
+    /// <summary>玩家受击带来源位置（阶段6 S5：受击方向指示器；来源未知为 zero）</summary>
+    public static event Action<Vector3> OnPlayerDamagedFrom;
     /// <summary>玩家死亡（GameManager/结算订阅）</summary>
     public static event Action OnPlayerDeath;
     /// <summary>玩家开枪（枪口位置 + 武器名，音效/噪音）</summary>
@@ -62,6 +64,8 @@ public static class GameEvents
     // ===== Raise 方法（内部 null 检查，命名 Raise{事件名去掉On}） =====
 
     public static void RaisePlayerDamaged() => OnPlayerDamaged?.Invoke();
+    /// <summary>广播玩家受击来源位置（阶段6 S5；来源未知传 zero）</summary>
+    public static void RaisePlayerDamagedFrom(Vector3 sourcePos) => OnPlayerDamagedFrom?.Invoke(sourcePos);
 
     public static void RaisePlayerDeath() => OnPlayerDeath?.Invoke();
 

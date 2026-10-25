@@ -1452,6 +1452,36 @@ CameraTarget：PlayerController 只写 localRotation（俯仰视角），
 
 ---
 
+## 阶段 6 S5 敌人血条 + 受击方向指示器记录（2026-10-26）
+
+> 编译 0 错误 0 警告 | Play 验证通过 | 场景已保存（Canvas+DamageIndicatorUI）
+
+### S5 变更内容（PHASE6_PLAN §2.5/§2.6）
+
+| 文件 | 内容 |
+|------|------|
+| `EnemyHealthBar.cs` **新建** | 挂三敌人 prefab：**运行时自建**世界空间 Canvas（背景+左对齐红色填充条，0.6×0.07m @头顶 2.2m）——免 prefab 层级手术（坑 55~57 规避）；受击显示 3s 自动隐藏、Billboard 朝主相机（引用失效自动重取）、死亡 HidePermanent（尸体不留血条） |
+| `DamageIndicatorUI.cs` **新建** | 挂主 Canvas：4 实例轮换（连续受击不互断），订阅 `OnPlayerDamagedFrom(sourcePos)`——以相机水平朝向为 0°，扇形旋转指向来向（SignedAngle），1s 淡出（手动 alpha，无 DOTween 依赖）；来源 zero 向量忽略 |
+| `GameEvents.cs` | +`OnPlayerDamagedFrom(Vector3)` + Raise（只增不改） |
+| `PlayerHealth.cs` | TakeDamage 重载 `(amount, sourcePos)`（旧签名转发 zero，调用方零破坏）+ 广播新事件 |
+| `EnemyBase.cs` | TakeDamage → `_healthBar.ShowDamage(血量比例)`；Die → `HidePermanent()`；FaceAndFire 命中玩家传 `TakeDamage(damage, transform.position)` |
+| `Assets/Textures/DamageIndicator.png` **新增** | 程序化 64×64 径向扇形（尖头朝上，角度/内外缘柔化），Sprite 导入 |
+| 敌人 prefab ×3 | +EnemyHealthBar 组件 |
+
+**赋值坑（追加）**：manage_components set_property 对 Sprite 字段两种 guid 格式均报"Failed to convert"——改用 execute_code 的 `SerializedObject.FindProperty("indicatorSprite").objectReferenceValue` 赋值成功（不依赖 CodeDom 识别新类型，坑 81 变通）。
+
+### Play 验证
+
+| 项 | 结果 |
+|----|------|
+| 血条 | 敌人受 60 伤 → HealthBarCanvas 激活、fill 比例正确（程序读数）✅；位置头顶 2.1m ✅ |
+| 方向指示器 | 正面来敌伤害 → 红色扇形出现在屏幕正上方（截图确认）✅；来自侧面时应偏向对应侧（SignedAngle 数学直读）|
+| 联动 | 受击同时触发红晕（既有系统）+ 指示器 + 受击动画，互不冲突 ✅ |
+
+**注**：测试玩家在验证期间被波次敌人击杀（YOU DIED，阶段 5 结算流程再次顺带验证）。
+
+---
+
 ## 下一阶段
 
 > **规划基准已迁移至 [DEVELOPMENT_PLAN.md](file:///k:/Unity/UnityProject/AI%20Test/Assets/DEVELOPMENT_PLAN.md)（2026-09-06 创建）**——后续开发以该文档为准，包含完整差距分析、已确认决策（D1 Raycast弹道 / D2 轻量静态事件 / D3 波次生存模式 / D4 任务包顺序）、接口定义、进度计划与测试策略。

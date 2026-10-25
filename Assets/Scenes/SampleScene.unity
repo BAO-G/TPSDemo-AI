@@ -193,6 +193,17 @@ MonoBehaviour:
   searchDuration: 3
   searchTurnSpeed: 90
   reHuntOnSearchTimeout: 1
+  reHuntMinOffset: 8
+  reHuntMaxOffset: 15
+  engageMinDistance: 6
+  engageMaxDistance: 13
+  strafeSpeed: 2
+  strafeSwitchInterval: 0.8
+  backOffSpeed: 2.5
+  huntSpreadMin: 2
+  huntSpreadMax: 5
+  searchSpreadMin: 2
+  searchSpreadMax: 5
 --- !u!195 &29107587
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -268,6 +279,7 @@ GameObject:
   - component: {fileID: 85339438}
   - component: {fileID: 85339439}
   - component: {fileID: 85339440}
+  - component: {fileID: 85339441}
   m_Layer: 0
   m_Name: Canvas
   m_TagString: Untagged
@@ -487,6 +499,22 @@ MonoBehaviour:
   bannerDuration: 2
   popScale: 0.6
   tickPunch: 0.12
+--- !u!114 &85339441
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 85339430}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f11b99f2cf28804f97d27fbc275a031, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  indicatorSprite: {fileID: 21300000, guid: f9a05b82ad9be654893950f8d8657b1d, type: 3}
+  instanceCount: 4
+  indicatorDistance: 130
+  fadeDuration: 1
 --- !u!1 &136235074
 GameObject:
   m_ObjectHideFlags: 0
@@ -852,6 +880,17 @@ MonoBehaviour:
   searchDuration: 3
   searchTurnSpeed: 90
   reHuntOnSearchTimeout: 1
+  reHuntMinOffset: 8
+  reHuntMaxOffset: 15
+  engageMinDistance: 6
+  engageMaxDistance: 13
+  strafeSpeed: 2
+  strafeSwitchInterval: 0.8
+  backOffSpeed: 2.5
+  huntSpreadMin: 2
+  huntSpreadMax: 5
+  searchSpreadMin: 2
+  searchSpreadMax: 5
 --- !u!195 &177397918
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -2567,6 +2606,17 @@ MonoBehaviour:
   searchDuration: 3
   searchTurnSpeed: 90
   reHuntOnSearchTimeout: 1
+  reHuntMinOffset: 8
+  reHuntMaxOffset: 15
+  engageMinDistance: 6
+  engageMaxDistance: 13
+  strafeSpeed: 2
+  strafeSwitchInterval: 0.8
+  backOffSpeed: 2.5
+  huntSpreadMin: 2
+  huntSpreadMax: 5
+  searchSpreadMin: 2
+  searchSpreadMax: 5
 --- !u!195 &441088430
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -2677,6 +2727,17 @@ MonoBehaviour:
   searchDuration: 3
   searchTurnSpeed: 90
   reHuntOnSearchTimeout: 1
+  reHuntMinOffset: 8
+  reHuntMaxOffset: 15
+  engageMinDistance: 6
+  engageMaxDistance: 13
+  strafeSpeed: 2
+  strafeSwitchInterval: 0.8
+  backOffSpeed: 2.5
+  huntSpreadMin: 2
+  huntSpreadMax: 5
+  searchSpreadMin: 2
+  searchSpreadMax: 5
 --- !u!195 &445460839
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -3835,6 +3896,17 @@ MonoBehaviour:
   searchDuration: 3
   searchTurnSpeed: 90
   reHuntOnSearchTimeout: 1
+  reHuntMinOffset: 8
+  reHuntMaxOffset: 15
+  engageMinDistance: 6
+  engageMaxDistance: 13
+  strafeSpeed: 2
+  strafeSwitchInterval: 0.8
+  backOffSpeed: 2.5
+  huntSpreadMin: 2
+  huntSpreadMax: 5
+  searchSpreadMin: 2
+  searchSpreadMax: 5
 --- !u!195 &782875887
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -4671,6 +4743,17 @@ MonoBehaviour:
   searchDuration: 3
   searchTurnSpeed: 90
   reHuntOnSearchTimeout: 1
+  reHuntMinOffset: 8
+  reHuntMaxOffset: 15
+  engageMinDistance: 6
+  engageMaxDistance: 13
+  strafeSpeed: 2
+  strafeSwitchInterval: 0.8
+  backOffSpeed: 2.5
+  huntSpreadMin: 2
+  huntSpreadMax: 5
+  searchSpreadMin: 2
+  searchSpreadMax: 5
 --- !u!195 &925339743
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -8503,6 +8586,17 @@ MonoBehaviour:
   searchDuration: 3
   searchTurnSpeed: 90
   reHuntOnSearchTimeout: 1
+  reHuntMinOffset: 8
+  reHuntMaxOffset: 15
+  engageMinDistance: 6
+  engageMaxDistance: 13
+  strafeSpeed: 2
+  strafeSwitchInterval: 0.8
+  backOffSpeed: 2.5
+  huntSpreadMin: 2
+  huntSpreadMax: 5
+  searchSpreadMin: 2
+  searchSpreadMax: 5
 --- !u!195 &1765766140
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -10014,6 +10108,17 @@ MonoBehaviour:
   searchDuration: 3
   searchTurnSpeed: 90
   reHuntOnSearchTimeout: 1
+  reHuntMinOffset: 8
+  reHuntMaxOffset: 15
+  engageMinDistance: 6
+  engageMaxDistance: 13
+  strafeSpeed: 2
+  strafeSwitchInterval: 0.8
+  backOffSpeed: 2.5
+  huntSpreadMin: 2
+  huntSpreadMax: 5
+  searchSpreadMin: 2
+  searchSpreadMax: 5
 --- !u!195 &2059067210
 NavMeshAgent:
   m_ObjectHideFlags: 0
